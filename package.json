@@ -20,11 +20,12 @@
     "check:emission": "node scripts/checks/emission.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:source": "node scripts/checks/source-audit.mjs",
-    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations",
+    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release",
     "check:portal": "node scripts/checks/portal.test.mjs",
     "check:rtx": "python3 services/rtx-worker/test_protocol.py",
     "check:operations": "python3 scripts/checks/operations_test.py",
-    "check:policy": "node scripts/checks/policy.test.mjs"
+    "check:policy": "node scripts/checks/policy.test.mjs",
+    "check:worker-release": "node scripts/checks/worker-release.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

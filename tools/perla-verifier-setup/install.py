@@ -188,7 +188,7 @@ def install(project,nginx_file):
     if nginx_file not in active:raise ValueError('The selected Nginx file is not loaded by the active configuration.')
     run(['nginx','-t']);run(['docker','compose','version'],capture=True)
     atomic(secret_file,'PERLA_VERIFIER_TOKEN='+token+'\n')
-    print('Building native Pearl verifier. Cargo build jobs: 2. Runtime limit: 4 CPU / 5 GiB.',flush=True)
+    print('Building the Perla native verifier. Cargo build jobs: 2. Runtime limit: 4 CPU / 5 GiB.',flush=True)
     run(['docker','build','--build-arg','CARGO_BUILD_JOBS=2','-t',IMAGE,str(ROOT/'native')])
     backup=state/('backup-'+time.strftime('%Y%m%d-%H%M%S')+'-'+str(os.getpid()));backup.mkdir(mode=0o700)
     originals={env_path:env_original,nginx_file:nginx_original,SNIPPET:SNIPPET.read_text() if SNIPPET.exists() else None}

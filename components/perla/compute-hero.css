@@ -1,0 +1,25 @@
+.compute-hero{position:relative;isolation:isolate;min-height:730px;height:calc(100svh - 78px);max-height:1100px;overflow:hidden;background:var(--paper,#f0efea)}
+.compute-hero-backdrop,.compute-field,.compute-hero-wash{position:absolute;inset:0;width:100%;height:100%}
+.compute-hero-backdrop{z-index:0;pointer-events:none;background:url('/brand/compute-field-poster.svg') center center/cover no-repeat}
+.compute-field{z-index:1;display:block;opacity:0;transition:opacity .8s ease;cursor:grab;touch-action:pan-y;outline-offset:-7px}
+.compute-hero[data-ready=true] .compute-field{opacity:1}.compute-field[data-dragging=true]{cursor:grabbing}
+.compute-hero-wash{z-index:2;pointer-events:none;background:linear-gradient(180deg,#f0efea 0%,#f0efea8c 14%,#f0efea14 42%,transparent 62%,transparent 89%,#f0efea 100%)}
+.compute-hero-copy{position:relative;z-index:3;max-width:1040px;padding:40px 24px 0;margin:0 auto;text-align:center;pointer-events:none}
+.compute-hero-eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.21em;color:#565952;line-height:1.6}
+.compute-hero-eyebrow span{padding:0 11px;color:var(--coral)}
+.compute-hero h1{font-family:var(--serif);font-size:clamp(76px,7.5vw,128px);font-weight:400;line-height:.96;letter-spacing:-.048em;margin:24px 0 25px;color:var(--ink);text-wrap:balance}
+.compute-hero h1 em{font-weight:400;color:var(--coral);white-space:nowrap}
+.compute-hero-description{font-size:clamp(15px,1.35vw,19px);color:#555b51;line-height:1.65;margin:0}
+.compute-mobile-break{display:none}.compute-hero-actions{display:flex;justify-content:center;gap:14px;margin:23px auto 0;pointer-events:auto;width:fit-content}
+.compute-hero-actions .button{min-height:49px;padding:0 24px;gap:12px;justify-content:center;border-radius:5px;font-size:13px;font-weight:500;transition:background .2s,transform .2s,color .2s}
+.compute-hero-actions .button:hover{transform:translateY(-2px)}.compute-primary{background:var(--coral);color:#fffaf5;border:1px solid var(--coral)}.compute-primary:hover{background:var(--coral-dark);border-color:var(--coral-dark)}
+.compute-secondary{border:1px solid #9fa297;background:#f0efeac9;backdrop-filter:blur(10px);color:var(--ink)}.compute-secondary:hover{background:#fafbf7}
+.compute-scene-controls{position:absolute;right:clamp(22px,5vw,88px);bottom:22px;z-index:4;display:flex;align-items:center;gap:7px}.compute-scene-controls[hidden]{display:none}
+.compute-scene-controls button{border:1px solid #24262226;border-radius:50%;width:34px;height:34px;display:grid;place-items:center;background:#f0efeac9;cursor:pointer;transition:background .2s}.compute-scene-controls button:hover{background:#fffaf0}.compute-scene-controls button:focus-visible{outline:2px solid var(--coral);outline-offset:3px}
+.compute-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(min-width:1600px){.compute-hero-copy{padding-top:44px}.compute-hero h1{margin-top:27px}}
+@media(max-height:800px) and (min-width:1000px){.compute-hero{min-height:670px}.compute-hero-copy{padding-top:30px}.compute-hero h1{font-size:98px;margin:20px 0}.compute-hero-actions{margin-top:20px}}
+@media(max-width:1000px){.compute-hero{height:calc(100svh - 76px);min-height:720px}.compute-hero h1{font-size:clamp(70px,9.5vw,98px)}.compute-hero-copy{padding-top:48px}}
+@media(max-width:600px){.compute-hero{height:calc(92svh - 72px);min-height:650px;max-height:820px}.compute-hero-copy{padding:39px 16px 0}.compute-hero-eyebrow{font-size:8px;letter-spacing:.13em}.compute-hero-eyebrow span{padding:0 6px}.compute-hero h1{font-size:clamp(43px,12.3vw,74px);letter-spacing:-.045em;line-height:1.04;margin:24px 0 21px}.compute-mobile-break{display:block}.compute-hero-description{font-size:14px;line-height:1.65}.compute-hero-actions{gap:10px;margin-top:23px}.compute-hero-actions .button{font-size:11px;min-height:44px;padding:0 15px;gap:8px}.compute-hero-wash{background:linear-gradient(180deg,#f0efea 0%,#f0efead9 14%,#f0efea40 40%,transparent 64%,transparent 90%,#f0efea 100%)}.compute-scene-controls{bottom:17px;right:18px}.compute-scene-controls button{width:36px;height:36px}}
+@media(prefers-reduced-motion:reduce){.compute-field,.compute-hero-actions .button{transition:none}.compute-hero-actions .button:hover{transform:none}}
+@media(max-width:360px){.compute-hero-actions .button{padding:0 12px;font-size:10.5px}.compute-hero-actions{gap:9px}}

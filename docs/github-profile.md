@@ -12,4 +12,4 @@ Our testnet work focuses on native proof verification, transparent contribution 
 
 [Explore Perla](https://perlacompute.xyz) · [Documentation](https://perlacompute.xyz/docs) · [Whitepaper](https://perlacompute.xyz/whitepaper) · [Status](https://perlacompute.xyz/status)
 
-Mainnet remains on hold. Perla is an independent project; no endorsement by Pearl Research Labs or Robinhood is implied.
+Mainnet remains on hold. Perla is an independent project. [Credits and licenses](https://perlacompute.xyz/docs#sources) identify its open-source foundations.

@@ -7,4 +7,4 @@ Perla Worker 0.5.0 adds a verified GitHub installer and a local lifecycle comman
 
 This is a validation preview. The installer and release pipeline do not attest hardware, activate mining, fund rewards or establish an AI inference service. Physical GPU runs and supervised proof-to-receipt validation remain deployment checks. The standalone GPU self-test is for RTX; Hopper uses its documented model/inference procedure.
 
-The kernel, proof format and pinned Pearl source remain unchanged: 82e6eee7076aafe10123e08db78f100d270c0582. Upstream and third-party license notices are retained in both worker packages.
+The kernel, proof format and pinned upstream source remain unchanged: 82e6eee7076aafe10123e08db78f100d270c0582. Upstream and third-party license notices are retained in both worker packages.

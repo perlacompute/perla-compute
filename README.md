@@ -36,7 +36,7 @@ Perla uses Robinhood for settlement. Proof submission does not mint new ERC-20 t
 ## Software included
 
 - Wallet authentication, worker credentials and persistent SQLite accounting.
-- Native certificate verification through the pinned Pearl Rust/PyO3 binding.
+- Native certificate verification through a pinned Rust/PyO3 binding.
 - Proof Explorer, Reward Center, installation wizard and token treasury reads.
 - Deterministic reward allocation, funding checks and claim tracking.
 - Work policies, worker diagnostics, encrypted backups and restore drills.
@@ -66,7 +66,7 @@ npm run typecheck
 node scripts/checks/vps-http.test.mjs
 ```
 
-Software checks use isolated SQLite databases and a local EVM. They do not broadcast public-chain transactions. Native integration tests require the pinned upstream binding and the `PERLA_NATIVE_PYTHON` / `PERLA_PEARL_SOURCE` configuration described in [ARCHITECTURE.md](ARCHITECTURE.md).
+Software checks use isolated SQLite databases and a local EVM. They do not broadcast public-chain transactions. Native integration tests require the pinned upstream binding and test configuration described in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 GitHub Actions source is included for software checks, RTX compilation/CPU protocol checks and draft release artifacts. A successful GitHub run can be claimed only after the workflow executes on the actual repository. The workflows contain no wallet key, public-chain deployment, epoch funding or VPS deployment step.
 
@@ -97,7 +97,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.
 
 ## Attribution and license
 
-Perla is an independent integration with the pinned [Pearl Research Labs source](https://github.com/pearl-research-labs/pearl/tree/82e6eee7076aafe10123e08db78f100d270c0582). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and [the adapter notice](services/pearl-adapter/NOTICE.md). No endorsement by Pearl or Robinhood is implied.
+Perla is an independent project. [Credits and upstream provenance](docs/UPSTREAM.md) identify the original components and their pinned revision. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and the notices retained in the worker packages.
 
 Perla-authored material uses the [MIT License](LICENSE). Third-party components retain their own licenses. Mathematical proof acceptance does not attest GPU ownership, customer demand or the correctness of an entire AI answer.
 

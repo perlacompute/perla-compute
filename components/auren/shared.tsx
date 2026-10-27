@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { SiteHeader } from '@/components/perla/site-header';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, useId } from 'react';
 import { ArrowUpRight, ArrowRight, Check, Copy, X, ChevronDown, Menu, Wallet, LoaderCircle } from 'lucide-react';
@@ -117,17 +118,5 @@ export function WalletButton() {
     } };
     return <><button className="wallet-button" onClick={() => account ? setOpen(true) : void connect()} disabled={busy}>{busy ? <LoaderCircle size={15} className="spin"/> : <Wallet size={15}/>}<span>{account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'Connect wallet'}</span>{account && <ChevronDown size={13}/>}</button>{open && <Modal title={account ? 'Your wallet' : 'Connect your wallet'} onClose={() => setOpen(false)}><div className="wallet-dialog"><div className="wallet-avatar"><Wallet size={28}/></div>{account ? <><p className="mono wallet-address">{account}</p><Pill tone={chain === brand.network.chainId ? 'green' : 'coral'}>{chain === brand.network.chainId ? 'Robinhood Testnet' : `Network ${chain ?? 'unknown'}`}</Pill><p>Your wallet is connected. Sign in from the mining dashboard to manage workers. Claims require a funded reward epoch.</p>{chain !== brand.network.chainId && <button className="button button-dark" onClick={switchChain}>Switch to Robinhood Testnet<ArrowRight size={16}/></button>}<CopyButton value={account} label="Copy address"/></> : <><h3>Bring your EVM wallet.</h3><p>Connect an installed wallet to explore your testnet account. No payment is requested.</p><button className="button button-dark" onClick={connect}>Connect installed wallet<ArrowRight size={16}/></button></>}{error && <p className="form-error" role="alert">{error}</p>}</div></Modal>}</>;
 }
-export function Header() {
- const [open, setOpen] = useState(false);
- const path = usePathname();
- const id = useId();
- useEffect(() => { setOpen(false); }, [path]);
- useEffect(() => {
-   const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
-   window.addEventListener('keydown', close);
-   return () => window.removeEventListener('keydown', close);
- }, []);
- const links = [['/platform/mining', 'Mine'], ['/explorer', 'Explorer'], ['/rewards', 'Rewards'], ['/docs', 'Docs'], ['/whitepaper', 'Whitepaper'], ['/status', 'Status']];
- return <><a className="skip-link" href="#main-content">Skip to content</a><header className="site-header"><div className="header-inner"><Logo/><nav id={id} className={open ? 'marketing-nav open' : 'marketing-nav'} aria-label="Main navigation">{links.map(([href, label]) => <Link href={href} key={href} aria-current={path === href ? 'page' : undefined} onClick={() => setOpen(false)}>{label}<ArrowUpRight className="nav-mobile-arrow" size={16}/></Link>)}<Link className="nav-mobile-dashboard" href="/platform/mining" onClick={() => setOpen(false)}>Open dashboard<ArrowUpRight size={16}/></Link></nav><div className="header-actions"><Link href="/platform/mining" className="button button-dark button-small">Open dashboard<ArrowUpRight size={15}/></Link><button className="mobile-menu icon-btn" aria-label={open ? 'Close navigation' : 'Open navigation'} aria-controls={id} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button></div></div></header></>;
-}
+export function Header() { return <SiteHeader logo={<Logo compact/>}/>; }
 export function Footer(){return <footer className="site-footer"><div className="footer-top"><div><Logo/><p>GPU work. Verified contributions.<br/>Settlement on Robinhood.</p></div><div className="footer-column"><strong>Participate</strong><Link href="/platform/mining">Mining dashboard</Link><Link href="/platform/setup">Guided miner setup</Link><Link href="/participate">Participant guide</Link></div><div className="footer-column"><strong>Learn</strong><Link href="/docs">Docs</Link><Link href="/whitepaper">Whitepaper</Link><Link href="/docs#tokenomics">Supply & rewards</Link></div><div className="footer-column"><strong>Network</strong><Link href="/explorer">Proof Explorer</Link><Link href="/rewards">Reward Center</Link><Link href="/status">Status & evidence</Link></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} {brand.fullName}</span><span><i className="status-dot muted-dot"/>{brand.phase} · Robinhood Testnet</span></div></footer>}

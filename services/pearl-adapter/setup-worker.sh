@@ -7,7 +7,7 @@ for command in git docker nvidia-smi; do
 done
 capabilities="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader)"
 if ! [[ "$capabilities" =~ 9\.0 ]]; then
-  echo 'This pinned Pearl kernel profile supports NVIDIA sm90 (H100/H200). Other GPUs have not been validated.' >&2
+  echo 'The Perla Hopper worker profile requires NVIDIA sm90 (H100/H200). For RTX GPUs, select the separate RTX worker profile.' >&2
   exit 1
 fi
 upstream="${PERLA_UPSTREAM_DIR:-$script_dir/pearl-upstream}"

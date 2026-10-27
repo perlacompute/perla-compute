@@ -6,3 +6,5 @@
 .content h2:focus{outline:none}
 .content :global(.portal-command){max-width:100%;min-width:0}
 @container(max-width:420px){.content :global(.portal-command>div){flex-direction:column;align-items:flex-start;gap:8px}.content :global(.portal-command>div>span){font-size:10px;line-height:1.6}.content :global(.portal-command pre){padding:14px}}
+
+.device{display:grid;grid-template-columns:1fr 72px;align-items:center;gap:8px 15px;padding:14px 16px;border:1px solid #dedbd3;border-radius:9px;font-size:12px;margin:18px 0}.device input{min-width:0;width:100%;padding:7px;border:1px solid #d6cfc0;background:#fbfaf6;border-radius:5px}.device small{grid-column:1/-1;font-size:11px;line-height:1.7;color:#77736b}
