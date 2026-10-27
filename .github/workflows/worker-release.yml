@@ -1,0 +1,45 @@
+name: Worker installer release
+on:
+  push:
+    tags: ['worker-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing reviewed worker release tag
+        required: true
+        default: worker-v0.5.0
+permissions:
+  contents: read
+concurrency:
+  group: worker-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WORKER_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Open the exact workflow source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = perlacompute/perla-compute
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
+          mkdir source
+          tar -xzf source.tar.gz --strip-components=1 -C source
+      - name: Verify installer and release lifecycle
+        working-directory: source
+        run: |
+          python3 -m unittest discover -s tests/worker_installer -v
+          bash -n install.sh
+      - name: Package reviewed worker sources
+        working-directory: source
+        run: python3 scripts/package-worker-release.py --output release --tag "$WORKER_TAG"
+      - name: Publish checked validation prerelease
+        working-directory: source
+        run: python3 scripts/publish-worker-release.py --folder release --tag "$WORKER_TAG" --commit "$GITHUB_SHA"
+      # No driver installation, GPU execution, wallet key or mining-admission change.
