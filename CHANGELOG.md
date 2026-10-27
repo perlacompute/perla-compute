@@ -1,3 +1,10 @@
+# Unreleased — Rewards and Miner Setup
+
+- Published the mainnet mining allocation plan: 70M PERL migration cap and 130M future mainnet mining, within the planned fixed 1B supply.
+- Added a closed Bridge preview with 100:7 arithmetic and a planned global 1M mainnet PERL daily output cap. No migration contract, reserve funding or transaction path is activated.
+- Split Miner Setup preparation into four manual checks, linked worker-config creation, hid online start during paused admission, and read reward funding status from the existing treasury endpoint.
+- Removed the sidebar promotion and aligned Rewards, Docs, Whitepaper and participant guidance. Existing worker releases, mining rules and funded testnet claims remain unchanged.
+
 # 0.4.0-rc.1 — RTX validation preview
 
 - Added an independent dense INT8 WMMA matrix worker with native sm86, sm89 and

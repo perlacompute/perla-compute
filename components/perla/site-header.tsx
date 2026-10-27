@@ -10,6 +10,7 @@ const exploreLinks = [
  ['/platform/setup', 'Miner setup', 'Install and validate your worker'],
  ['/explorer', 'Proof Explorer', 'Inspect accepted contributions'],
  ['/rewards', 'Reward Center', 'Follow funded reward epochs'],
+ ['/bridge', 'Bridge · Coming soon', 'Read the planned testnet migration policy'],
  ['/status', 'Network status', 'Read service and release evidence'],
 ] as const;
 export function SiteHeader({ logo }: { logo: ReactNode }) {

@@ -66,5 +66,15 @@ try {
   const notices=await(await call('/third-party-notices.txt')).text();assert(notices.includes('Pearl integration'));assert(notices.includes('licenses or copyright notices'));
   assert.equal((await(await call('/api/mining/status')).json()).protocol,'perla-pearl-plain-v4');
  });
+ await test('reward policy API exposes the agreed caps without activating a bridge',async()=>{
+  const response=await call('/api/reward-policy');assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const policy=await response.json();
+  assert.equal(policy.migrationAllocation,'70000000');assert.equal(policy.mainnetMiningAllocation,'130000000');assert.equal(policy.totalMiningAllocation,'200000000');assert.equal(policy.unallocated,'800000000');assert.equal(policy.testnetRatioUnits,100);assert.equal(policy.mainnetRatioUnits,7);assert.equal(policy.dailyMainnetLimit,'1000000');assert.equal(policy.bridgeEnabled,false);
+  assert.equal((await call('/api/reward-policy',{method:'POST',body:{bridgeEnabled:true}})).status,405);
+ });
+ await test('Bridge, reward plans and documentation remain truthful before mainnet',async()=>{
+  for(const path of ['/bridge','/platform/bridge']){const response=await call(path);assert.equal(response.status,200);const text=await response.text();assert(text.includes('data-perla-bridge="coming-soon"'));assert(text.includes('Bridge opens with mainnet'));assert(text.includes('Maximum migration allocation'));assert(text.includes('70,000,000'));assert(text.includes('1,000,000'));assert(text.includes('disabled=""'));}
+  for(const path of ['/rewards','/platform/rewards','/docs','/whitepaper']){const response=await call(path);assert.equal(response.status,200);const text=await response.text();assert(text.includes('data-reward-plan="perla-rewards-plan-v1"'));assert(text.includes('130M'));if(['/docs','/whitepaper'].includes(path))assert(text.includes('id="migration"'));}
+  const setup=await(await call('/platform/setup')).text();assert(!setup.includes('THE NEXT CHAPTER'));assert(setup.includes('/platform/bridge'));assert.equal((await(await call('/api/mining/status')).json()).miningEnabled,false);
+ });
  console.log(`${passed} worker website production HTTP checks passed.`);
 }finally{await stop();await rm(temp,{recursive:true,force:true});}

@@ -11,3 +11,5 @@ verification
 .sites-runtime
 __pycache__
 *.pyc
+.perla-backups
+.perla-backups/**

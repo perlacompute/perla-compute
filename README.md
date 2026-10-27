@@ -17,7 +17,7 @@ This repository contains the **0.5.0 testnet source**. Mainnet remains on hold.
 | Mining admission | Paused at the latest supplied operator checkpoint |
 | Physical GPU validation | Still requires real hardware self-tests and accepted coordinator receipts |
 | Public reward activation | No completed funded mining epoch or live claim reported in this release record |
-| Mainnet | No mainnet token deployment, mining activation or testnet conversion rule |
+| Mainnet | On hold; published 70M migration / 130M mining plan, 100:7 ratio and 1M global daily migration output cap; no active bridge or funded mainnet reserve |
 
 The PERL token is `0xfeAB80c7665973D91F3f3FAB36CBB3183C8dC4F8`; its distributor is `0xa35C0Cb08279998c2948Ac340ef056d07bDC5547`. See [the dated deployment record](deployments/robinhood-testnet.json) and [PERL integration notes](docs/PERL-TESTNET.md). The earlier tPERLA contracts remain separate historical deployments.
 
@@ -102,3 +102,9 @@ Perla is an independent project. [Credits and upstream provenance](docs/UPSTREAM
 Perla-authored material uses the [MIT License](LICENSE). Third-party components retain their own licenses. Mathematical proof acceptance does not attest GPU ownership, customer demand or the correctness of an entire AI answer.
 
 Maintainers preparing the first repository can follow [the GitHub publication guide](docs/publishing.md).
+
+## Reward and migration plan
+
+The fixed mainnet supply plan is 1B PERL. Mining allocations total 200M: up to 70M for eligible testnet reward migration, and 130M for mining after mainnet. The planned conversion is 100 eligible testnet PERL to 7 mainnet PERL. Migration output is planned to be capped globally at 1M mainnet PERL per UTC day. The other 800M has no allocation assigned in this plan. See [Docs](https://perlacompute.xyz/docs#migration) and [Bridge](https://perlacompute.xyz/bridge).
+
+Bridge remains coming soon; this release does not deploy/fund mainnet contracts or activate migration. A conversion preview is arithmetic, not an eligibility check. Owner balances and arbitrary testnet transfers do not establish migration rights. The existing testnet distributor enforces funded testnet allocations, not the planned migration or its output limit.

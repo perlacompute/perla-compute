@@ -27,3 +27,7 @@ First integration requires paused mining, no reward epochs in the coordinator, a
 Testnet PERL and any future mainnet PERL are separate contracts and balances. An equal ticker and supply do not create a bridge, conversion right, mainnet allocation, or funded mainnet mining reserve.
 
 [Token explorer](https://explorer.testnet.chain.robinhood.com/address/0xfeAB80c7665973D91F3f3FAB36CBB3183C8dC4F8) · [Distributor explorer](https://explorer.testnet.chain.robinhood.com/address/0xa35C0Cb08279998c2948Ac340ef056d07bDC5547)
+
+## Planned mainnet migration
+
+Mainnet supply remains planned at 1B PERL. The policy allocates up to 70M to verified testnet reward migration and 130M to mining after mainnet, for a total 200M mining allocation. Conversion: 100 eligible testnet PERL = 7 mainnet PERL. Planned global output cap: 1M mainnet PERL per UTC day. Migration requires a published eligibility snapshot and funded mainnet reserve. Arbitrary balances/transfers are insufficient. Bridge is coming soon and is not active in this release.
