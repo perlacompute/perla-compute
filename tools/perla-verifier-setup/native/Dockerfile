@@ -1,0 +1,24 @@
+FROM python:3.12-slim-bookworm AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential git curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup.sh && sh /tmp/rustup.sh -y --profile minimal --default-toolchain 1.99.1
+ENV PATH=/root/.cargo/bin:$PATH
+RUN pip install --no-cache-dir maturin==1.13.0
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+WORKDIR /opt/pearl
+RUN git init && git remote add origin https://github.com/pearl-research-labs/pearl.git && git fetch --depth 1 origin 82e6eee7076aafe10123e08db78f100d270c0582 && git checkout --detach FETCH_HEAD
+WORKDIR /opt/pearl/py-pearl-mining
+RUN maturin build --release --locked --out /wheels
+RUN git rev-parse HEAD > /opt/pearl/PERLA_UPSTREAM_COMMIT
+FROM python:3.12-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
+COPY --from=builder /opt/pearl/PERLA_UPSTREAM_COMMIT /opt/pearl/PERLA_UPSTREAM_COMMIT
+COPY verifier.py native-fixture.py healthcheck.py /app/
+COPY --from=builder /opt/pearl/LICENSE /opt/pearl/LICENSE
+ENV PERLA_PEARL_SOURCE=/opt/pearl RAYON_NUM_THREADS=2 PYTHONDONTWRITEBYTECODE=1
+USER 65534:65534
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["python", "/app/healthcheck.py"]
+EXPOSE 8766
+ENTRYPOINT ["python", "/app/verifier.py", "--host", "0.0.0.0", "--port", "8766"]

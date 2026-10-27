@@ -1,0 +1,8 @@
+{
+  "sourceRelease": "Perla VPS 0.2.3",
+  "contractsDigest": "0xdaedc2748e118cbf2716a7449ccae9c03d7e0eed30eb8512e7ec938a2f7f3539",
+  "chainId": 46630,
+  "testnetSupply": "1000000000",
+  "symbol": "tPERLA",
+  "decimals": 18
+}

@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!rtx.cu
+!build-cuda.sh
+!protocol.py
+!cuda_backend.py
+!reference.py
+!miner.py
+!test_protocol.py
+!perla_bridge.py
+!NOTICE.md
+!work-profiles.json

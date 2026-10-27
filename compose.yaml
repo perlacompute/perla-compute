@@ -1,0 +1,23 @@
+name: perla-compute
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      PERLA_SQLITE_PATH: /app/data/perla.sqlite
+    ports:
+      - "127.0.0.1:${PERLA_HTTP_PORT:-3109}:3000"
+    volumes:
+      - perla_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/mining/status').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+volumes:
+  perla_data:

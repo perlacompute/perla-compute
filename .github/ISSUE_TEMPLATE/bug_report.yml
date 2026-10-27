@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem in Perla software.
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: 'Share a sanitized reproduction. Keep wallet keys, worker/operator tokens, environment files and private logs out of reports. Use SECURITY.md for sensitive vulnerabilities.'
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Explain what you tried and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest useful sequence, release and relevant sanitized error.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser or Node/CUDA version; include exact GPU hardware for worker issues.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: Public receipt IDs, sanitized logs or screenshots when relevant.

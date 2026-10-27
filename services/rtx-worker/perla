@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set +x
+set -euo pipefail
+cd -- "$(dirname -- "$0")"
+image=perla-rtx-worker:0.5.0
+command="${1:-doctor}"
+if [ "$#" -gt 0 ]; then shift; fi
+case "$command" in
+ doctor) exec python3 doctor.py "$@" ;;
+ selftest|mine)
+   docker image inspect "$image" >/dev/null 2>&1 || { echo 'Build the worker first: bash setup-worker.sh' >&2; exit 1; }
+   args=(run --rm --gpus all --cap-drop ALL --security-opt no-new-privileges --pids-limit 256)
+   if [ "$command" = mine ]; then
+     [ -f worker.env ] || { echo 'worker.env is missing. Register a worker in the portal.' >&2; exit 1; }
+     [ ! -L worker.env ] || { echo 'Use a private regular worker.env file.' >&2; exit 1; }
+     case "$(stat -c %a worker.env)" in 400|600) ;; *) echo 'Restrict credentials first: chmod 600 worker.env' >&2; exit 1 ;; esac
+     args+=(--env-file worker.env)
+     exec docker "${args[@]}" "$image" run "$@"
+   fi
+   exec docker "${args[@]}" --network none "$image" selftest "$@"
+   ;;
+ *) echo 'Usage: bash perla doctor | selftest [--device N] | mine [--device N --shares N]' >&2; exit 2 ;;
+esac

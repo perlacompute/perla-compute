@@ -1,0 +1,4 @@
+import Link from 'next/link';
+import {ArrowUpRight,Layers3} from 'lucide-react';
+import {Pill} from './shared';
+export function FutureUpgrade({name}:{name:string}){return <><div className="page-heading"><div><span className="eyebrow">A FUTURE CHAPTER</span><h1>{name}<span className="coral">.</span></h1><p>Our first release is focused on compute and testnet mining.</p></div><Pill>Future upgrade</Pill></div><section className="panel future-upgrade-panel"><Layers3 size={35}/><h2>Mining first.<br/><em>More comes next.</em></h2><p>AI services and developer access will return as a dedicated product upgrade. Explore the mining workspace while we build the foundation.</p><Link href="/platform/mining" className="button button-dark">Explore compute & mining<ArrowUpRight size={16}/></Link></section></>}

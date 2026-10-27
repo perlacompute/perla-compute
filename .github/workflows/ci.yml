@@ -1,0 +1,64 @@
+name: Software checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  software:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run package:mining
+      - run: npm run build
+      - run: npm run typecheck
+      - run: node scripts/checks/vps-http.test.mjs
+
+  rtx-software:
+    name: RTX compilation and CPU protocol checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/package-mining.mjs
+      - run: |
+          mkdir -p /tmp/perla-rtx-ci
+          tar -xzf public/downloads/perla-rtx-worker.tar.gz -C /tmp/perla-rtx-ci
+          docker build -t perla-rtx-ci /tmp/perla-rtx-ci/perla-rtx-worker
+      - run: docker run --rm --entrypoint python perla-rtx-ci /app/test_protocol.py
+      - name: Native coordinator integration without GPU claims
+        run: |
+          docker build --target native -t perla-native-ci /tmp/perla-rtx-ci/perla-rtx-worker
+          container=$(docker create perla-native-ci)
+          docker cp "$container:/wheels" /tmp/perla-wheels
+          docker rm "$container"
+          python3 -m venv /tmp/perla-native-env
+          /tmp/perla-native-env/bin/pip install /tmp/perla-wheels/*.whl
+          git clone --filter=blob:none --no-checkout https://github.com/pearl-research-labs/pearl.git /tmp/perla-upstream
+          git -C /tmp/perla-upstream checkout 82e6eee7076aafe10123e08db78f100d270c0582
+          PERLA_NATIVE_PYTHON=/tmp/perla-native-env/bin/python PERLA_PEARL_SOURCE=/tmp/perla-upstream npm run check:mining
+      # A hosted CPU runner cannot perform a physical GPU self-test.

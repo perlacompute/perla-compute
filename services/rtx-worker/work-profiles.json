@@ -1,0 +1,35 @@
+{
+  "chainId": 46630,
+  "certificateVersion": 3,
+  "protocol": "perla-pearl-plain-v4",
+  "version": 1,
+  "referenceBits": 486604799,
+  "maximumWorkFactor": 8388608,
+  "profiles": [
+    {
+      "id": "p1",
+      "bits": 486604799,
+      "points": 1
+    },
+    {
+      "id": "p2",
+      "bits": 478150528,
+      "points": 2
+    },
+    {
+      "id": "p4",
+      "bits": 473956288,
+      "points": 4
+    },
+    {
+      "id": "p8",
+      "bits": 471859168,
+      "points": 8
+    },
+    {
+      "id": "p16",
+      "bits": 470810608,
+      "points": 16
+    }
+  ]
+}

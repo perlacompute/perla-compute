@@ -1,0 +1,5 @@
+# First build the pinned upstream image with setup-worker.sh.
+ARG PEARL_IMAGE=perla-pearl:82e6eee7076a
+FROM ${PEARL_IMAGE}
+COPY perla_bridge.py worker-entrypoint.sh /perla/
+ENTRYPOINT ["bash", "/perla/worker-entrypoint.sh"]

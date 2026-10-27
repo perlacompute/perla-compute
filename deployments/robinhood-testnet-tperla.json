@@ -1,0 +1,16 @@
+{
+  "chainId": 46630,
+  "network": "Robinhood Testnet",
+  "token": "0xdf5a38ef066b026a88cfab52bbbb5b00c8a8a254",
+  "distributor": "0x6f573855c81d82acfa82cdc9fcf2af8d3dd2327b",
+  "symbol": "tPERLA",
+  "supply": "1000000000",
+  "decimals": 18,
+  "tokenTransaction": "0x654ddc490ca54af7acbd3fc33aa34d4d6953fcdd41eb5c95ee5cc177cd29d01a",
+  "distributorTransaction": "0x9e94f389a5ffdbeeff9f454c7d69bc4ddebf1f8f2bc6ce40c68bc657d120667e",
+  "explorer": "https://explorer.testnet.chain.robinhood.com",
+  "reportedAt": "2026-10-24T08:55:13.525Z",
+  "evidence": "Operator-supplied successful deployment report; not an independent explorer verification by this repository preparation.",
+  "plannedMainnetTicker": "PERL",
+  "mainnetToken": null
+}
