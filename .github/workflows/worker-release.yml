@@ -8,6 +8,9 @@ on:
         description: Existing reviewed worker release tag
         required: true
         default: worker-v0.5.0
+      release_id:
+        description: Optional existing draft ID discovered by the repository owner
+        required: false
 permissions:
   contents: read
 concurrency:
@@ -22,15 +25,26 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       WORKER_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      WORKER_RELEASE_ID: ${{ github.event.inputs.release_id || '' }}
     steps:
-      - name: Open the exact workflow source commit
+      - name: Open the publisher and the pinned worker source separately
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = perlacompute/perla-compute
-          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > source.tar.gz
+          [[ "$WORKER_TAG" =~ ^worker-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          worker_commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/$WORKER_TAG" --jq .sha)
+          [[ "$worker_commit" =~ ^[0-9a-f]{40}$ ]]
+          printf 'WORKER_COMMIT=%s\n' "$worker_commit" >> "$GITHUB_ENV"
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" > publisher.tar.gz
+          mkdir publisher
+          tar -xzf publisher.tar.gz --strip-components=1 -C publisher
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$worker_commit" > source.tar.gz
           mkdir source
           tar -xzf source.tar.gz --strip-components=1 -C source
+      - name: Verify repaired publication lifecycle
+        working-directory: publisher
+        run: python3 -m unittest discover -s tests/worker_installer -v
       - name: Verify installer and release lifecycle
         working-directory: source
         run: |
@@ -40,6 +54,12 @@ jobs:
         working-directory: source
         run: python3 scripts/package-worker-release.py --output release --tag "$WORKER_TAG"
       - name: Publish checked validation prerelease
-        working-directory: source
-        run: python3 scripts/publish-worker-release.py --folder release --tag "$WORKER_TAG" --commit "$GITHUB_SHA"
+        working-directory: publisher
+        run: |
+          args=()
+          if [[ -n "$WORKER_RELEASE_ID" ]]; then
+            [[ "$WORKER_RELEASE_ID" =~ ^[1-9][0-9]*$ ]]
+            args+=(--release-id "$WORKER_RELEASE_ID")
+          fi
+          python3 scripts/publish-worker-release.py --folder "$GITHUB_WORKSPACE/source/release" --tag "$WORKER_TAG" --commit "$WORKER_COMMIT" "${args[@]}"
       # No driver installation, GPU execution, wallet key or mining-admission change.
