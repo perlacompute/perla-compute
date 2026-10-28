@@ -1,7 +1,7 @@
 /** Public explanations for the implemented Perla validation profile. */
 export const miningFlow = [
-  { title: 'Authorize a wallet', detail: 'Sign a one-time message to manage your mining account. Your address becomes the recipient for that account’s contributions.' },
-  { title: 'Register a worker', detail: 'Give the installation a name. Save its revocable token once and download the worker configuration.' },
+  { title: 'Set a reward wallet', detail: 'Enter your public EVM address in the worker command. Use that wallet to authorize dashboard management and funded claims.' },
+  { title: 'Name and connect a worker', detail: 'Choose a rig name. The CLI saves its private connection and uploads GPU checks automatically on the GPU host.' },
   { title: 'Receive a challenge', detail: 'The coordinator creates a short-lived job bound to this site, network, epoch, worker and recipient.' },
   { title: 'Compute on your GPU', detail: 'The RTX preview runs standalone matrix mining. The separate Hopper vLLM integration produces proofs during supported AI inference operations.' },
   { title: 'Check the proof', detail: 'An isolated native verifier checks the admitted work. An accepted job creates one persistent contribution record.' },
@@ -9,7 +9,7 @@ export const miningFlow = [
 ] as const;
 
 export const workloads = [
-  { title: 'RTX matrix mining', profile: 'RTX 30 / 40 / 50 · sm86 / sm89 / sm120 · certificate v3', result: 'Standalone GPU matrix work and native proof', status: 'Physical GPU validation required', note: 'Experimental worker. No model checkpoint, customer inference or measured Perla hashrate.' },
+  { title: 'RTX matrix mining', profile: 'RTX 30 / 40 / 50 · sm86 / sm89 / sm120 · certificate v3', result: 'Standalone GPU matrix work and native proof', status: 'One RTX 4090 trial recorded', note: 'The reported RTX 4090 passed GPU checks and produced an accepted receipt. RTX 30/50 and sustained operation need separate tests. This workload serves no customer inference.' },
   { title: 'Dense matrix computation', profile: 'Dense NoisyGEMM · rank 128 · certificate v3', result: 'Matrix work and a native mining proof', status: 'Integration implemented', note: 'GPU execution remains a deployment-host check.' },
   { title: 'Reference text inference', profile: 'Reference 70B checkpoint · pinned model-serving plugin', result: 'An AI response, with shares possible during supported operations', status: 'GPU validation pending', note: 'The reference command uses two GPUs. Actual VRAM needs depend on configuration.' },
   { title: 'Protocol test fixture', profile: 'CPU-generated native PlainProof', result: 'Reproducible proof-to-ledger validation', status: 'Software tested', note: 'This exercises mathematics and accounting; it is not an AI service or GPU benchmark.' },
@@ -30,10 +30,13 @@ export const securityControls = [
 ] as const;
 
 export const miningFaqs = [
-  ['What is Perla?', 'Perla connects AI-oriented GPU mining with wallet-bound contribution accounting and funded settlement on Robinhood. Its coordinator connects GPU workers, native proof verification and contribution records.'],
+  ['What is Perla?', 'Perla is building GPU compute infrastructure with verifiable work records and funded settlement on Robinhood. Its current RTX testnet validates matrix computation, proof submission and wallet-bound contribution accounting.'],
+  ['Why run testnet mining?', 'It exercises worker connections, mathematical verification and contribution accounting before useful customer jobs are introduced. The current standalone RTX challenges are infrastructure tests; they do not fulfill paid AI requests.'],
+  ['Does this mining secure Robinhood?', 'Perla records application-level work and reward allocations on Robinhood. Its workers do not produce Robinhood blocks or participate in Robinhood consensus.'],
+  ['How would Perla earn revenue?', 'The intended product direction is a compute service: customers pay for useful GPU jobs and Perla charges a service fee. Customer dispatch, billing and platform-fee revenue are future product work. The current RTX trial has not demonstrated customer revenue; testnet reward budgets require explicit funding.'],
   ['What is the GPU actually doing?', 'The RTX preview computes standalone dense INT8 matrix mining without a model checkpoint. The separate H100/H200 path serves an AI model through the pinned model-serving plugin. Both construct native mining proofs; matrix mining alone does not demonstrate customer AI inference.'],
   ['Does an accepted share prove an AI answer is true?', 'It verifies the admitted mathematical mining work. It does not establish the truth, safety or quality of a complete AI answer, identify the physical GPU, or prove that a paying customer requested it.'],
-  ['Is mining open now?', 'Worker management and the protocol are implemented. Public admission is paused by default until a verifier and the supported GPU deployment are validated. The Status page reads the current deployment’s admission setting.'],
+  ['Is mining open now?', 'The Network Status page reads the deployment’s current admission setting. When admission is enabled, connected workers can request jobs; accepted proofs create contribution records. Token claims require a separately funded epoch.'],
   ['Which hardware can I use?', 'The experimental RTX package includes sm86 for RTX 30, sm89 for RTX 40 and sm120 for RTX 50 series on Linux. Each needs a real GPU self-test and accepted receipt before being described as validated. The separate H100/H200 vLLM path targets sm90. Windows-native mining is outside this release.'],
   ['Can I mine in a browser or on my CPU?', 'The browser manages your account and displays server records. It does not run the CUDA miner. CPU proof fixtures are used for software tests and are not an advertised participant mining path.'],
   ['Do I need to run a blockchain node?', 'No. RTX workers talk directly to the Perla coordinator over scoped HTTPS; the vLLM path uses a local bridge. Reward contracts use Robinhood Chain Testnet, while proof checking and contribution accounting run offchain.'],
