@@ -3,7 +3,7 @@
 import argparse,fcntl,hashlib,io,json,os,platform,re,shlex,shutil,stat,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 REPO='perlacompute/perla-compute'
-DEFAULT_RELEASE='worker-v0.5.0'
+DEFAULT_RELEASE='worker-v0.6.0'
 SCHEMA=1
 class WorkerError(Exception):pass
 
@@ -32,8 +32,12 @@ def atomic(path,data,mode=0o600):
 def command(args,visible=False,env=None,timeout=None):
  try:
   p=subprocess.run(args,stdout=None if visible else subprocess.PIPE,stderr=None if visible else subprocess.PIPE,env=env,timeout=timeout)
- except (OSError,subprocess.TimeoutExpired):raise WorkerError('Command unavailable or timed out: '+args[0]) from None
- if p.returncode:raise WorkerError('Command failed: '+' '.join(args[:2]))
+ except FileNotFoundError:raise WorkerError('Missing executable: '+args[0]) from None
+ except subprocess.TimeoutExpired:raise WorkerError('Command timed out: '+args[0]) from None
+ except OSError:raise WorkerError('Cannot execute: '+args[0]) from None
+ if p.returncode:
+  detail=(p.stderr or b'').decode(errors='replace')[-1000:] if not visible else ''
+  raise WorkerError('Command failed: '+' '.join(args[:2])+' '+detail)
  return p.stdout.decode().strip() if p.stdout is not None else ''
 
 class HTTPSOnly(urllib.request.HTTPRedirectHandler):
@@ -265,6 +269,8 @@ def parser():
   s=sub.add_parser(cmd);s.add_argument('--device',type=int,default=0)
   if cmd=='start':s.add_argument('--shares',type=int,default=1);s.add_argument('--interval',type=float,default=10);s.add_argument('--model');s.add_argument('--tensor-parallel-size',type=int,default=2)
  sub.add_parser('status');sub.add_parser('stop');l=sub.add_parser('logs');l.add_argument('--tail',type=int,default=100);sub.add_parser('version')
+ login=sub.add_parser('login');login.add_argument('--name');login.add_argument('--endpoint',default='https://perlacompute.xyz')
+ upload=sub.add_parser('upload-validation');upload.add_argument('--file',required=True)
  return p
 
 def main(argv=None):
@@ -277,6 +283,13 @@ def main(argv=None):
   if args.command=='install':install(root,directory(args.bin_dir),args.release,args.profile);return
   installed=state(root)
   if digest(regular(Path(installed['tool']),2*1024*1024))!=installed['toolSha256']:raise WorkerError('The installed CLI program changed.')
+  import importlib.util
+  helper=Path(installed['directory'])/'worker_session.py'
+  if helper.is_file() and args.command in ('login','upload-validation','doctor','build','selftest','start'):
+   spec=importlib.util.spec_from_file_location('perla_worker_session',helper);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+   try:
+    if module.dispatch(root,installed,args,__import__('types').SimpleNamespace(WorkerError=WorkerError,atomic=atomic,regular=regular,configuration=configuration,command=command)):return
+   except RuntimeError as error:raise WorkerError(str(error)) from None
   if args.command=='version':emit({k:installed[k] for k in ['release','profile','image','upstreamCommit']})
   elif args.command=='update':upgrade(root,installed,args.release,before_execute=lambda:fcntl.flock(lock,fcntl.LOCK_UN))
   elif args.command=='configure':configure(root,args.file)

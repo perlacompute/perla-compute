@@ -54,6 +54,45 @@ try{
  const w=await add();const other=await add(b);
  await test('fresh policy keeps admission closed even when the master switch is enabled',async()=>{assert.equal((await(await call('status')).json()).miningEnabled,false);assert.equal((await call('work',{token:w.token})).status,503);});
  const validation={version:'0.5.0',protocol:'perla-pearl-plain-v4',upstreamCommit:'82e6eee7076aafe10123e08db78f100d270c0582',gpuSelfTestPassed:true,device:{computeCapability:89,name:'TEST ASSERTION ONLY'},cases:[2048,4096].map(k=>({k,fullGemmMatchesReference:true,allTranscriptsMatchReference:true,nativeV3ProofAccepted:true,nonWinningPowRejected:true,changedChallengeRejected:true}))};
+
+ await test('CLI pairing requires wallet approval and permits only one credential exchange',async()=>{
+  const init=await call('pairing/start',{method:'POST',body:{name:'Paired CLI'}});assert.equal(init.status,201);const pair=await init.json();
+  assert.equal((await call('pairing/exchange',{method:'POST',token:pair.deviceSecret,body:{}})).status,202);
+  assert.equal((await call('pairing/approve',{method:'POST',body:{code:pair.userCode}})).status,401);
+  assert.equal((await call('pairing/approve',{method:'POST',cookie:cookies.get(a.address),origin:'https://evil.test',body:{code:pair.userCode}})).status,403);
+  assert.equal((await call('pairing/approve',{method:'POST',cookie:cookies.get(a.address),body:{code:pair.userCode}})).status,200);
+  const results=await Promise.all([call('pairing/exchange',{method:'POST',token:pair.deviceSecret,body:{}}),call('pairing/exchange',{method:'POST',token:pair.deviceSecret,body:{}})]);
+  assert.equal(results.filter(r=>r.status===201).length,1);const value=await results.find(r=>r.status===201).json();
+  assert.equal(value.address,a.address.toLowerCase());assert.equal((await call('worker/status',{token:value.token})).status,200);
+  const read=await(await call('account',{cookie:cookies.get(a.address)})).text();assert(!read.includes(value.token));
+  await call('workers/'+value.id,{method:'DELETE',cookie:cookies.get(a.address)});await db.prepare('DELETE FROM mining_workers WHERE id=?').bind(value.id).run();
+ });
+ await test('expired device pairing cannot be claimed and never creates a worker',async()=>{
+  const pair=await(await call('pairing/start',{method:'POST',body:{name:'Expired'}})).json();await db.prepare('UPDATE mining_device_pairings SET expires=0').run();
+  assert.equal((await call('pairing/exchange',{method:'POST',token:pair.deviceSecret,body:{}})).status,410);
+ });
+ await test('validation upload is authenticated and does not open public admission',async()=>{
+  const report={...validation,coordinatorContacted:false,ledgerCredit:0,cases:validation.cases.map(c=>({...c,signedExtremesMatchReference:true}))};
+  assert.equal((await call('worker/validation',{method:'POST',body:{report}})).status,401);
+  assert.equal((await call('worker/validation',{method:'POST',token:w.token,body:{report:{}}})).status,400);
+  const r=await call('worker/validation',{method:'POST',token:w.token,body:{report}});assert.equal(r.status,200);assert.equal((await r.json()).uploaded,true);
+  assert.equal((await(await call('status')).json()).miningEnabled,false);
+ });
+ await test('operator-controlled trial admits only its named worker and one genuine native proof',async()=>{
+  const cfg={...env,PERLA_MINING_ENABLED:'false'};
+  assert.equal((await call('operator/validations')).status,401);
+  const rows=await(await call('operator/validations',{token:env.PERLA_OPERATOR_TOKEN})).json();const report=rows.validations.find(v=>v.worker_id===w.id);
+  assert.equal((await call('operator/trials',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{workerId:w.id,validationHash:'stale'}})).status,409);
+  assert.equal((await call('operator/trials',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{workerId:w.id,validationHash:report.hash}},cfg)).status,200);
+  assert.equal((await call('work',{token:other.token},cfg)).status,503);
+  const jr=await call('work',{token:w.token},cfg);assert.equal(jr.status,200);const j=await jr.json();const proof=fixture(j);
+  await db.prepare("UPDATE mining_jobs SET protocol='test-hold' WHERE id=?").bind(j.id).run();const jr2=await call('work',{token:w.token},cfg);assert.equal(jr2.status,200);const j2=await jr2.json();const proof2=fixture(j2);await db.prepare("UPDATE mining_jobs SET protocol='perla-pearl-plain-v4' WHERE id=?").bind(j.id).run();
+  const rs=await Promise.all([call('shares',{method:'POST',token:w.token,body:{jobId:j.id,plainProof:proof.plain_proof}},cfg),call('shares',{method:'POST',token:w.token,body:{jobId:j2.id,plainProof:proof2.plain_proof}},cfg)]);
+  assert.equal(rs.filter(r=>r.status===201).length,1);assert.equal((await call('work',{token:w.token},cfg)).status,503);
+  assert.equal((await(await call('status',{},cfg)).json()).miningEnabled,false);
+  // Isolate the pre-existing integration expectations from this explicit trial fixture.
+  await db.prepare('DELETE FROM mining_shares WHERE worker_id=?').bind(w.id).run();await db.prepare('DELETE FROM mining_worker_trials').run();await db.prepare('DELETE FROM mining_jobs').run();
+ });
  await test('policy activation requires an authenticated current GPU report',async()=>{assert.equal((await call('operator/policy',{method:'POST',body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation}})).status,401);assert.equal((await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation:{}}})).status,400);const r=await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation}});assert.equal(r.status,200,await r.clone().text());});
 
  await test('worker secrets are hashed and never returned by account reads',async()=>{const result=await(await call('account',{cookie:cookies.get(a.address)})).json();assert.equal(result.workers.length,1);assert(!JSON.stringify(result).includes(w.token));const row=await db.prepare('SELECT token_hash FROM mining_workers WHERE id=?').bind(w.id).first();assert.notEqual(row.token_hash,w.token);});

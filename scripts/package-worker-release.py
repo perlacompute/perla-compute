@@ -11,6 +11,9 @@ def package(output,tag):
  output.mkdir(parents=True,exist_ok=True)
  def archive(profile,names,folder):
   info=manifest['profiles'][profile];files={n:(ROOT/folder/n).read_bytes() for n in names}
+  files['worker_session.py']=(ROOT/'scripts/worker-session.py').read_bytes()
+  if profile=='rtx':
+   for name in ['native_worker.py','worker-inventory.json']:files[name]=(ROOT/'services/rtx-worker'/name).read_bytes()
   files['perla_bridge.py']=(ROOT/'services/pearl-adapter/perla_bridge.py').read_bytes();files['PERLA-MIT-LICENSE.txt']=(ROOT/'LICENSE').read_bytes()
   raw=io.BytesIO()
   with tarfile.open(fileobj=raw,mode='w') as tar:

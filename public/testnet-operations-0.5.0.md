@@ -1,8 +1,6 @@
-> Historical 0.5.0 release document. For the later PERL testnet deployment, read [PERL testnet](./perl-testnet.md).
-
 # Perla 0.5.0 testnet operations
 
-Mainnet is on hold. This release supports Robinhood Testnet 46630 only. No migration of tPERLA to a mainnet token is promised. The deployed token still identifies as tPERLA; the planned branding ticker is PERL.
+Mainnet is on hold. This release supports Robinhood Testnet 46630 only. The active testnet token is PERL with a fixed 1B supply and a new matching distributor. Mainnet is a separate planned deployment; testnet balances do not establish a conversion right. See PERL-TESTNET.md for current addresses and the migration guard.
 
 ## Upgrade order
 
@@ -18,13 +16,18 @@ The policy definitions are `lib/perla/work-profiles.json`, also shipped in the R
 
 Each job stores its protocol, bits, points, profile and policy hash at issuance. Changing a profile does not reprice an existing job. One job can be credited once. After the UTC epoch closes and outstanding jobs expire, rewards use the existing deterministic integer allocation and largest-remainder method. The operator still chooses budgets and publishes roots; this is an offchain coordinator, not a permissionless onchain proof verifier.
 
-Fresh policy state is inactive, even if the environment master switch says true. Before any admission trial:
+Fresh policy state is inactive. Worker setup is now `perla login` followed by `perla start`. Reports upload through the authenticated worker connection; operators do not ask miners to copy files to the website VPS.
 
-1. Build worker 0.5.0 on a real RTX 30/40/50 host. Run `bash perla doctor`, then `bash perla selftest --device 0 > gpu-validation.json`.
-2. Review every passing case for K=2048/4096. This is an operator-supplied assertion, not hardware attestation or Sybil protection. Never publish worker.env.
-3. Inspect current state using `node scripts/perla-control.mjs policy` with private `PERLA_ENDPOINT` and `PERLA_OPERATOR_TOKEN` exported locally.
-4. Register the reviewed report with `node scripts/perla-control.mjs activate-policy p1 START_UTC_EPOCH gpu-validation.json`. Start at p1 and measure share arrival times on the actual host. If the current UTC epoch contains legacy shares, schedule the next epoch. Larger point profiles reduce expected share arrival frequency; do not claim calibrated hardware throughput until measured.
-5. Enabling `PERLA_MINING_ENABLED=true` is a separate operator action followed by a controlled one-share GPU trial. This update performs neither action. Pause immediately if verifier pressure or unexpected rejection appears.
+For a controlled trial, run on the website VPS:
+
+```bash
+bash scripts/perla-trial.sh review
+bash scripts/perla-trial.sh start
+```
+
+Start requires exactly one eligible uploaded report unless a reviewed worker ID is supplied. It grants that named worker at most one accepted share for 15 minutes. The commit-time SQL quota also applies to concurrent proofs from distinct jobs. Public admission and reward funding remain unchanged. The miner then reruns `perla start --device 0 --shares 1`. Use `bash scripts/perla-trial.sh stop WORKER_ID` to revoke the trial immediately.
+
+Reports are worker-supplied assertions, not hardware attestation. Review the actual device and checks. General public policy activation remains a separate operator action and must not be presented as a miner setup step.
 
 No universal hashrate, earnings, AI inference throughput or one-person-one-worker guarantee is made. Rate limits bound requests per worker/wallet and global auth load; they do not prevent identities from being created outside the service.
 

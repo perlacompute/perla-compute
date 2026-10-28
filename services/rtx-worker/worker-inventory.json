@@ -1,0 +1,12 @@
+{
+  "rtx.cu": "411ecad61b8013d0a14f3a5cfa222ef744583cc22859199e1eea6c94eb97f67b",
+  "protocol.py": "26fe732fc9d69dc927eb2fafcad46f98472131db1b7629a170aa8b4958959997",
+  "cuda_backend.py": "ccc9204eb0b71461216fe68b3c23520cf96a555453a1b24f684e5a91dc024dc8",
+  "reference.py": "1269bf719d2e1393fc10f97bd1c2783a6dc700381b81f313d67929dd11cf8786",
+  "miner.py": "b44d6ca03aa6b0e7e3b7c37f98cc0b26f957dd313ea599c5ba964d0782ff9778",
+  "test_protocol.py": "99a8e06c174199982dceeb51ac17b066c7f1a18c1b4e5d729e4c5676bc278f07",
+  "work-profiles.json": "69884e0367598d12f0dfb5dcb0b2b4d7547df423cbfcfb7a638dd516feea44ab",
+  "NOTICE.md": "74fab253c0281ffd56696bf121e1d079bd7ee73813174343eb9d8b60d721e107",
+  "perla_bridge.py": "8da481951524d1cad7d8d3fc3edaae4dc3f2943e0b8cced18803f6a03ca65b92",
+  "PERLA-MIT-LICENSE.txt": "2ae70295d82ca1e8a6b8b22753b2113670190ad4ea1b41c718b746be8133bfee"
+}

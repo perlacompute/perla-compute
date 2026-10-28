@@ -2,12 +2,12 @@
 set +x
 set -euo pipefail
 umask 077
-release=worker-v0.5.0
+release=worker-v0.6.0
 for tool in python3 curl; do command -v "$tool" >/dev/null || { echo "Install $tool first." >&2; exit 1; }; done
 if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
  echo 'Perla worker installer — Linux x86-64'
  echo 'Usage: bash install.sh [--profile rtx|hopper] [--root /path] [--bin-dir /path]'
- echo 'Installs the pinned worker-v0.5.0 package. Does not build or start mining.'
+ echo 'Installs the pinned worker-v0.6.0 package. Does not build or start mining.'
  echo 'Full guide: https://perlacompute.xyz/platform/setup'
  exit 0
 fi

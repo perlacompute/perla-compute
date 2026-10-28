@@ -1,3 +1,4 @@
+import { onboardingRequest, trialFor } from './onboarding';
 import type { MiningDatabase } from './database';
 import { recoverMessageAddress, isAddress, createPublicClient, http, type Address } from 'viem';
 import { CERT_VERSION, CHAIN_ID, JOB_TTL, MAX_PROOF_BYTES, PROTOCOL, SHARE_BITS, UPSTREAM_COMMIT, compactTarget, currentEpoch, digest, fromBase64, makeJobHeader, randomToken } from './protocol';
@@ -81,8 +82,9 @@ export async function miningSummary(e:MiningEnv){
   const totals=await e.DB.prepare('SELECT COUNT(*) AS shares, COALESCE(SUM(points),0) AS points FROM mining_shares').first<{shares:number;points:number}>();
   const w=await e.DB.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE revoked IS NULL AND last_seen>?').bind(seconds()-90).first<{n:number}>();
   const active=await e.DB.prepare("SELECT COUNT(*) AS n FROM mining_reward_epochs WHERE state='active'").first<{n:number}>();
+  const registered=await e.DB.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE revoked IS NULL').first<{n:number}>();
   const policy=await workPolicy(e);
-  return {storage:true,policy,miningEnabled:policy.miningEnabled,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
+  return {storage:true,registeredWorkers:registered?.n??0,activeWorkers:w?.n??0,policy,miningEnabled:policy.miningEnabled,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
 }
 export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Response>{
  try{
@@ -93,6 +95,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   if(e.DB&&r.method==='GET'&&/^(treasury|epochs\/\d+)$/.test(path))await throttle(e.DB,'public-rpc-global',120,now);
   const portal=await publicPortalResponse(r,e);if(portal)return portal;
   const db=dbFor(e);
+  const setup=await onboardingRequest(r,{db,now,path,body:()=>body(r),origin:()=>originCheck(r),account:()=>account(r,db,now),worker:()=>worker(r,db,now),operator:()=>operator(r,e),health:()=>verifierCall(e,'/health'),throttle:(key,max,window)=>throttle(db,key,max,now,window),fail});if(setup)return setup;
   if(path==='policy'&&r.method==='GET')return json(await workPolicy(e));
   if(path==='operator/health'&&r.method==='GET'){await operator(r,e);let native:unknown;try{native=await verifierCall(e,'/health');}catch{native={ready:false};}return json({operations:await operationSummary(db),policy:await workPolicy(e),native,treasury:await treasurySnapshot(e)});}
   if(path==='operator/policy'&&r.method==='POST'){
@@ -104,7 +107,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await db.prepare('INSERT INTO mining_policy_state(id,profile_id,start_epoch,activated_at,validation_hash,validation_family,validation_version) VALUES(1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET profile_id=excluded.profile_id,start_epoch=excluded.start_epoch,activated_at=excluded.activated_at,validation_hash=excluded.validation_hash,validation_family=excluded.validation_family,validation_version=excluded.validation_version').bind(profile!.id,start,now,await digest(canonical(report)),String(device.computeCapability),'0.5.0').run();
    return json(await workPolicy(e));
   }
-  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,protocol:PROTOCOL,policy:await workPolicy(e),counts:counts.results,credentialValid:true,ledgerCredit:0});}
+  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
   if(path==='rewards/account'&&r.method==='GET'){
    const address=await account(r,db,now);const before=url.searchParams.get('before');
    if(before!==null&&!/^\d{1,15}$/.test(before))fail(400,'Invalid reward page cursor.');
@@ -166,7 +169,8 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   if(path==='work'&&r.method==='GET'){
    const w=await worker(r,db,now);await throttle(db,`work:${w.id}`,120,now);
    if(r.headers.get('x-perla-protocol')!==PROTOCOL)fail(426,'Upgrade to worker 0.5.0 for the current work policy.');
-   const policy=await workPolicy(e);if(!policy.miningEnabled)fail(503,'Mining admission is paused or its GPU validation policy is not active. Your worker is saved.');
+   const policy=await workPolicy(e);const trial=await trialFor(db,w.id,now);if(!policy.miningEnabled&&!trial)fail(503,'Mining admission is paused or its GPU validation policy is not active. Your worker is saved.');
+   if(!policy.miningEnabled&&trial)policy.profile=profileFor('p1');
    const h=await verifierCall(e,'/health');if(h.ready!==true)fail(503,'The native verifier is not ready.');
    const version=r.headers.get('x-perla-version');const arch=r.headers.get('x-perla-architecture');
    await db.prepare('UPDATE mining_workers SET last_seen=?,miner_version=?,architecture=? WHERE id=? AND revoked IS NULL').bind(now,version&&/^[0-9.a-z-]{1,24}$/.test(version)?version:null,arch&&/^(86|89|90|120)$/.test(arch)?arch:null,w.id).run();
@@ -177,7 +181,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   if(path==='shares'&&r.method==='POST'){
    const w=await worker(r,db,now);await throttle(db,`share:${w.id}`,30,now);
    if(r.headers.get('x-perla-protocol')!==PROTOCOL)fail(426,'Upgrade to worker 0.5.0.');
-   if(!(await workPolicy(e)).miningEnabled)fail(503,'Mining admission is paused.');
+   const publicAdmission=(await workPolicy(e)).miningEnabled;if(!publicAdmission&&!await trialFor(db,w.id,now))fail(503,'Mining admission is paused or this worker trial has ended.');
    const b=await body(r,Math.ceil(MAX_PROOF_BYTES*4/3)+4096);
    if(typeof b.jobId!=='string'||typeof b.plainProof!=='string')fail(400,'A job and native plain proof are required.');
    const proof=b.plainProof as string;
@@ -194,7 +198,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    if(result.proof_hash!==proofHash||result.header_hash!==headerHash)fail(503,'Verifier response binding failed.');
    // Re-check expiry/revocation/finalization at commit time. The unique job index makes concurrent submissions idempotent.
    const id=crypto.randomUUID();const accepted=seconds();
-   const inserted=await db.prepare('INSERT OR IGNORE INTO mining_shares (id,job_id,worker_id,address,epoch,proof_hash,accepted,points) SELECT ?,j.id,w.id,w.address,j.epoch,?,?,j.work_points FROM mining_jobs j JOIN mining_workers w ON w.id=j.worker_id WHERE j.id=? AND j.expires>? AND w.revoked IS NULL AND NOT EXISTS(SELECT 1 FROM mining_reward_epochs e WHERE e.epoch=j.epoch)').bind(id,proofHash,accepted,j!.id,accepted).run();
+   const inserted=await db.prepare('INSERT OR IGNORE INTO mining_shares (id,job_id,worker_id,address,epoch,proof_hash,accepted,points) SELECT ?,j.id,w.id,w.address,j.epoch,?,?,j.work_points FROM mining_jobs j JOIN mining_workers w ON w.id=j.worker_id WHERE j.id=? AND j.expires>? AND w.revoked IS NULL AND NOT EXISTS(SELECT 1 FROM mining_reward_epochs e WHERE e.epoch=j.epoch) AND (? OR EXISTS(SELECT 1 FROM mining_worker_trials t WHERE t.worker_id=w.id AND t.expires>? AND (SELECT COUNT(*) FROM mining_shares s WHERE s.worker_id=t.worker_id AND s.accepted>=t.created)<t.max_shares))').bind(id,proofHash,accepted,j!.id,accepted,publicAdmission?1:0,accepted).run();
    if(inserted.meta.changes!==1)fail(409,'Job was credited, expired, revoked, or its epoch is closed.');
    await recordWorker(db,w.id,'accepted');
    return json({id,accepted:true,points:j!.work_points,epoch:j!.epoch,proofHash,tokenReward:null},201);

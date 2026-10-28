@@ -1,37 +1,3 @@
 import Link from 'next/link';
 import { WorkerInstall } from './worker-install';
-import { workerCommands } from '@/lib/perla/worker-release';
-const commands=workerCommands('rtx');
-import { ArrowUpRight, Download } from 'lucide-react';
-import { CopyButton, Pill } from '@/components/auren/shared';
-
-function Code({ value }: { value: string }) {
-  return <div className="perla-code"><div><span>GPU host terminal</span><CopyButton value={value}/></div><pre><code>{value}</code></pre></div>;
-}
-
-export function RtxGuide() {
-  return <>
-    <span className="eyebrow">RTX WORKER / 0.5.0</span>
-    <h2>RTX 30, 40 and 50.<br/><em>One matrix-mining path.</em></h2>
-    <Pill tone="coral">Physical GPU validation required</Pill>
-    <p>The experimental worker includes native CUDA targets for all three families. It performs standalone dense INT8 matrix mining and produces the same certificate-v3 PlainProof checked by Perla. It does not load a model checkpoint or serve AI inference.</p>
-    <div className="table-scroll"><table><thead><tr><th>Family</th><th>CUDA target</th><th>Current evidence</th></tr></thead><tbody>
-      <tr><td>RTX 30 series</td><td>sm86 · 8.6</td><td>Build target included; GPU run required</td></tr>
-      <tr><td>RTX 40 series</td><td>sm89 · 8.9</td><td>Build target included; GPU run required</td></tr>
-      <tr><td>RTX 50 series</td><td>sm120 · 12.0</td><td>Build target included; GPU run required</td></tr>
-    </tbody></table></div>
-    <p>Use Linux x86-64, Docker Buildx, NVIDIA Container Toolkit and a driver compatible with CUDA 13.1. Build and run this on the GPU host. The website VPS does not supply GPU capacity.</p>
-    <h3>1. Install from the pinned GitHub release.</h3>
-    <p>Authorize your wallet and register a worker in Miner Setup. Save the private worker.env, copy it to your GPU host, then install, diagnose, build and import it.</p>
-    <WorkerInstall profile="rtx"/>
-    <h3>2. Run the offline GPU gate.</h3>
-    <Code value={commands.selftest}/>
-    <p>The command must exit successfully and report <code>gpuSelfTestPassed: true</code>. It compares the full GPU result and all transcripts with an independent CPU oracle, then checks native proof acceptance, a failing PoW and a changed challenge. Both K2048 and K4096 are tested. It contacts no coordinator and creates no credit. Each target family needs its own physical-host report.</p>
-    <h3>3. Follow one accepted contribution.</h3>
-    <p>After the GPU gate passes and the operator permits a controlled test, confirm the coordinator supports worker protocol v4 on chain 46630. The configuration must already be imported. The miner repeats a GPU check before requesting work. Paused admission exits without submitting a proof.</p>
-    <Code value={commands.start}/><Code value={commands.monitor}/><Code value={commands.stop}/>
-    <p>A confirmed <code>accepted_share</code> log contains a receipt and Explorer link. Check it against the signed-in account. The preview stops after one accepted share by default; it has no CPU mining fallback. The package README covers selected devices, supervised runs, failures and the remaining release gates.</p>
-    <p className="portal-caption">This is a correctness preview. No Perla GPU hashrate, earnings, useful customer AI workload or complete hardware-family validation is established by a successful software build. V4 uses bounded, non-saturating difficulty profiles; actual GPU share arrival times must still be measured before public mining.</p>
-    <Link className="arrow-link" href="/explorer">Open Proof Explorer<ArrowUpRight size={14}/></Link>
-  </>;
-}
+export function RtxGuide(){return <div><span className="eyebrow">RTX MINING</span><h2>Install. Connect. Start.</h2><p>The CLI pairs your GPU host with your wallet through a one-time browser approval. It saves the worker credential locally, selects a usable Docker runtime or native CUDA inside a GPU container, runs the hardware self-test and uploads its report directly to Perla.</p><WorkerInstall profile="rtx"/><p>A 4090 has passed the offline K2048/K4096 test in the operator’s reported environment. Online contribution testing remains pending. RTX 30 and 50 are implemented targets that still need their own physical GPU tests. A single-device pass does not validate an entire GPU family.</p><p>The workload is standalone matrix mining. Its proof checks are not evidence of a customer's AI inference. Contribution points follow accepted proof receipts; claims require a funded reward epoch.</p><p>The project operator reviews uploaded reports and can grant a one-worker, one-share, 15-minute trial while public admission stays paused. Miners do not configure operator policies or transfer reports to the website VPS.</p><Link href="/platform/setup">Open Miner Setup</Link></div>;}
