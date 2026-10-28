@@ -1,8 +1,15 @@
+# Worker 0.7.0 — Wallet and rig-name setup
+
+- Added public reward-address and worker-name connection with private local credentials; browser login remains for dashboard management and claims.
+- Miner Setup now generates an install-and-start command. GPU checks and report uploads are automatic.
+- Registration retries reuse the same identity; matching rig labels cannot overwrite another worker. Public connections do not consume the signed-wallet worker quota.
+- Preserved native proof checks, existing verified RTX runtime reuse, paused public admission, immutable earlier releases and the agreed reward plan. This remains a one-share validation release.
+
 # Unreleased — Rewards and Miner Setup
 
 - Published the mainnet mining allocation plan: 70M PERL migration cap and 130M future mainnet mining, within the planned fixed 1B supply.
 - Added a closed Bridge preview with 100:7 arithmetic and a planned global 1M mainnet PERL daily output cap. No migration contract, reserve funding or transaction path is activated.
-- Split Miner Setup preparation into four manual checks, linked worker-config creation, hid online start during paused admission, and read reward funding status from the existing treasury endpoint.
+- Replaced manual setup checks with wallet-and-name command generation; work remains gated by server admission and funded reward status.
 - Removed the sidebar promotion and aligned Rewards, Docs, Whitepaper and participant guidance. Existing worker releases, mining rules and funded testnet claims remain unchanged.
 
 # 0.4.0-rc.1 — RTX validation preview

@@ -1,5 +1,5 @@
-"""Device pairing, automatic report upload, and environment-aware worker execution."""
-import json,os,socket,time,urllib.error,urllib.parse,urllib.request,uuid
+"""Wallet-and-name miner setup, report upload, and environment-aware execution."""
+import json,os,re,secrets,socket,sys,time,urllib.error,urllib.parse,urllib.request,uuid
 from pathlib import Path
 
 ENDPOINT='https://perlacompute.xyz'
@@ -10,7 +10,7 @@ def call(path,payload=None,token=None,endpoint=ENDPOINT):
  u=urllib.parse.urlsplit(endpoint)
  if u.scheme!='https' or u.username or u.password or not u.hostname or u.query or u.fragment or u.path.rstrip('/'):
   raise RuntimeError('Use an HTTPS coordinator origin.')
- headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.6.0'}
+ headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.7.0'}
  if token:headers['authorization']='Bearer '+token
  request=urllib.request.Request(endpoint.rstrip('/')+'/api/mining/'+path,data=None if payload is None else json.dumps(payload).encode(),headers=headers)
  try:
@@ -50,11 +50,52 @@ def upload(root,report,cli):
  print('GPU report uploaded automatically. Worker '+result['workerId']+'; no mining credit created.',flush=True)
  return result
 
+def connect(root,args,cli):
+ """Payout routing only. Never requests a wallet key, signature, or browser login."""
+ config_path=root/'config/worker.env'
+ wallet=getattr(args,'wallet',None);name=getattr(args,'worker',None)
+ endpoint=getattr(args,'endpoint',None) or ENDPOINT
+ if config_path.exists():
+  config=cli.configuration(root)
+  if getattr(args,'endpoint',None) and endpoint!=config['PERLA_ENDPOINT']:
+   raise RuntimeError('An existing worker uses another coordinator. Use a separate --root installation.')
+  if wallet or name:
+   current=call('worker/status',token=config['PERLA_WORKER_TOKEN'],endpoint=config['PERLA_ENDPOINT'])
+   if (wallet and wallet.lower()!=current.get('address')) or (name and name!=current.get('name')):
+    raise RuntimeError('Wallet or worker name differs from the saved connection. Existing payout settings were retained. Use a separate --root installation for another rig.')
+  return
+ pending_path=root/'config/pending-connection.json'
+ pending=json.loads(cli.regular(pending_path,4000)) if pending_path.exists() else None
+ if pending:
+  if (wallet and wallet.lower()!=pending['address']) or (name and name!=pending['name']) or endpoint!=pending['endpoint']:
+   raise RuntimeError('A previous connection is pending with different payout settings. Retry those settings or use a separate --root installation.')
+  wallet,name,endpoint=pending['address'],pending['name'],pending['endpoint']
+ else:
+  if not wallet and sys.stdin.isatty():wallet=input('Reward wallet (public 0x address): ').strip()
+  if not wallet or not re.fullmatch(r'0x[0-9a-fA-F]{40}',wallet) or int(wallet[2:],16)==0:
+   raise RuntimeError('Use perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01. No private key is required.')
+  if not name:
+   default=re.sub(r'[^A-Za-z0-9._-]','-',socket.gethostname())[:48] or 'rig01'
+   if not re.match('[A-Za-z0-9]',default):default=('rig-'+default)[:48]
+   name=(input('Worker name ['+default+']: ').strip() or default) if sys.stdin.isatty() else default
+  if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,47}',name) or not re.search(r'[A-Za-z0-9]',name):
+   raise RuntimeError('Worker names use 1–48 letters, digits, dots, underscores or hyphens.')
+  pending={'address':wallet.lower(),'name':name,'endpoint':endpoint,'token':secrets.token_hex(32)}
+  cli.atomic(pending_path,(json.dumps(pending)+'\n').encode())
+ result=call('worker/connect',{'wallet':pending['address'],'name':pending['name']},pending['token'],endpoint)
+ if result.get('state')!='connected' or result.get('address')!=pending['address'] or result.get('name')!=pending['name'] or result.get('endpoint')!=endpoint or result.get('protocol')!='perla-pearl-plain-v4' or not isinstance(result.get('id'),str):
+  raise RuntimeError('Connection response does not match your payout settings. Local credentials were retained for recovery.')
+ cli.atomic(config_path,('PERLA_ENDPOINT='+endpoint+'\nPERLA_WORKER_TOKEN='+pending['token']+'\n').encode())
+ cli.atomic(root/'config/connection.json',(json.dumps({k:result[k] for k in ['id','address','name','endpoint']})+'\n').encode())
+ pending_path.unlink()
+ print('Worker: '+name+'\nReward wallet: '+pending['address']+'\nConnection saved privately. View this wallet in the Perla dashboard.',flush=True)
+
 def dispatch(root,installed,args,cli):
  if args.command=='login':
   login(root,installed,cli,args.name,args.endpoint);return True
  if args.command=='upload-validation':
   report=json.loads(cli.regular(Path(args.file),10000));upload(root,report,cli);return True
+ if args.command=='start':connect(root,args,cli)
  if installed['profile']!='rtx' or args.command not in ('doctor','build','selftest','start'):return False
  try:cli.command(['docker','version','--format','{{.Server.Version}}'],timeout=5);native=False
  except cli.WorkerError:native=True
@@ -65,7 +106,6 @@ def dispatch(root,installed,args,cli):
  if args.command=='build' and native:
   cli.command(helper+['build','--device',str(args.device)],visible=True);return True
  if args.command not in ('selftest','start'):return False
- if args.command=='start' and not (root/'config/worker.env').exists():login(root,installed,cli)
  if native:
   cli.command(helper+['build','--device',str(args.device)],visible=True)
   output=cli.command(helper+['selftest','--device',str(args.device)])
@@ -76,9 +116,10 @@ def dispatch(root,installed,args,cli):
  report=json.loads(output)
  if report.get('gpuSelfTestPassed') is not True or report.get('protocol')!='perla-pearl-plain-v4':raise RuntimeError('A passing GPU self-test is required.')
  cli.atomic(root/'reports/latest-gpu.json',(json.dumps(report,indent=2)+'\n').encode())
- print(json.dumps(report,indent=2),flush=True)
+ if args.command=='selftest':print(json.dumps(report,indent=2),flush=True)
+ else:print('GPU checks passed: '+str(report.get('device',{}).get('name','selected NVIDIA GPU'))+'. Report saved automatically.',flush=True)
  if (root/'config/worker.env').exists():upload(root,report,cli)
- else:print('Report saved locally. Run perla login, then perla upload-validation --file '+str(root/'reports/latest-gpu.json'),flush=True)
+ else:print('GPU checks passed. Run perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 to connect and upload automatically.',flush=True)
  if args.command=='selftest':return True
  config=cli.configuration(root);status=call('worker/status',token=config['PERLA_WORKER_TOKEN'],endpoint=config['PERLA_ENDPOINT'])
  if not status.get('policy',{}).get('miningEnabled') and not status.get('trial'):

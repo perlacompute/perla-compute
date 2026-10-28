@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('release_publisher',ROOT/'scripts/publish-worker-release.py');r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 class ReleaseTests(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory();self.folder=Path(self.tmp.name);subprocess.run(['python3',str(ROOT/'scripts/package-worker-release.py'),'--output',str(self.folder),'--tag','worker-v0.6.0'],check=True,capture_output=True)
+  self.tmp=tempfile.TemporaryDirectory();self.folder=Path(self.tmp.name);subprocess.run(['python3',str(ROOT/'scripts/package-worker-release.py'),'--output',str(self.folder),'--tag','worker-v0.7.0'],check=True,capture_output=True)
   self.sha='1'*40;self.release=None;self.calls=[];self.private=False;self.stale_list=False;self.stale_reads=[]
  def tearDown(self):self.tmp.cleanup()
  def asset(self,name):return {'name':name,'digest':'sha256:'+hashlib.sha256((self.folder/name).read_bytes()).hexdigest()}
@@ -15,7 +15,7 @@ class ReleaseTests(unittest.TestCase):
    if '/commits/' in args[2]:return self.sha
    if '/releases?' in args[2]:return json.dumps([self.release] if self.release and not self.stale_list else [])
    if args[2].endswith('/releases') and '--method' in args and args[args.index('--method')+1]=='POST':
-    self.release={'id':123,'tag_name':'worker-v0.6.0','prerelease':True,'draft':True,'html_url':'https://github.com/'+r.REPO+'/releases/tag/worker-v0.6.0','assets':[]};return json.dumps(self.release)
+    self.release={'id':123,'tag_name':'worker-v0.7.0','prerelease':True,'draft':True,'html_url':'https://github.com/'+r.REPO+'/releases/tag/worker-v0.7.0','assets':[]};return json.dumps(self.release)
    if args[2].endswith('/releases/123'):
     if '--method' in args:
      self.release['draft']=False;self.release['prerelease']=True
@@ -23,13 +23,13 @@ class ReleaseTests(unittest.TestCase):
     return json.dumps(self.release)
    return json.dumps({'private':self.private,'visibility':'private' if self.private else 'public'})
   if args[:3]==['gh','release','create']:
-   self.release={'id':123,'tag_name':'worker-v0.6.0','prerelease':True,'draft':True,'html_url':'https://github.com/'+r.REPO+'/releases/tag/worker-v0.6.0','assets':[]};return ''
+   self.release={'id':123,'tag_name':'worker-v0.7.0','prerelease':True,'draft':True,'html_url':'https://github.com/'+r.REPO+'/releases/tag/worker-v0.7.0','assets':[]};return ''
   if args[:3]==['gh','release','upload']:
    for path in args[6:]:self.release['assets'].append(self.asset(Path(path).name))
    return ''
   if args[:3]==['gh','release','edit']:self.release['draft']=False;return ''
   raise AssertionError(args)
- def publish(self,verify=False):return r.publish(self.folder,'worker-v0.6.0',self.sha,verify,self.gh,sleep=lambda seconds:None)
+ def publish(self,verify=False):return r.publish(self.folder,'worker-v0.7.0',self.sha,verify,self.gh,sleep=lambda seconds:None)
  def test_new_release_is_checked_then_published_as_a_prerelease(self):
   result=self.publish();self.assertTrue(result['published']);self.assertTrue(result['checksumsVerified']);self.assertFalse(self.release['draft']);self.assertTrue(self.release['prerelease']);self.assertFalse(any('--clobber' in a for a in self.calls))
  def test_repeat_verifies_without_replacing_any_asset(self):
@@ -46,7 +46,7 @@ class ReleaseTests(unittest.TestCase):
   with self.assertRaisesRegex(r.ReleaseError,'incomplete'):self.publish()
   self.assertFalse(any(a[:2]==['gh','release'] for a in self.calls))
  def test_wrong_tag_commit_cannot_create_a_release(self):
-  with self.assertRaisesRegex(r.ReleaseError,'tag'):r.publish(self.folder,'worker-v0.6.0','2'*40,runner=self.gh)
+  with self.assertRaisesRegex(r.ReleaseError,'tag'):r.publish(self.folder,'worker-v0.7.0','2'*40,runner=self.gh)
   self.assertIsNone(self.release)
  def test_private_repo_stays_private_and_is_not_reported_as_publicly_installable(self):
   self.private=True;result=self.publish();self.assertFalse(result['publicInstallAvailable']);self.assertFalse(result['visibilityChanged']);self.assertFalse(any('--visibility' in a for a in self.calls))
@@ -82,10 +82,10 @@ class ReleaseTests(unittest.TestCase):
   self.assertIn('HTTP 403',str(raised.exception));self.assertNotIn(token,str(raised.exception))
  def test_owner_discovered_draft_id_can_resume_when_list_results_are_empty(self):
   self.gh(['gh','release','create']);self.stale_list=True;self.calls=[]
-  result=r.publish(self.folder,'worker-v0.6.0',self.sha,runner=self.gh,sleep=lambda seconds:None,known_release_id=123)
+  result=r.publish(self.folder,'worker-v0.7.0',self.sha,runner=self.gh,sleep=lambda seconds:None,known_release_id=123)
   self.assertTrue(result['published']);self.assertFalse(any('/releases?' in a[2] or 'POST' in a for a in self.calls if a[:2]==['gh','api']))
  def test_an_owner_supplied_id_for_another_tag_cannot_publish(self):
   self.gh(['gh','release','create']);self.release['tag_name']='unrelated';self.calls=[]
-  with self.assertRaisesRegex(r.ReleaseError,'does not match'):r.publish(self.folder,'worker-v0.6.0',self.sha,runner=self.gh,known_release_id=123)
+  with self.assertRaisesRegex(r.ReleaseError,'does not match'):r.publish(self.folder,'worker-v0.7.0',self.sha,runner=self.gh,known_release_id=123)
   self.assertFalse(any('PATCH' in a or a[:3]==['gh','release','upload'] for a in self.calls))
 if __name__=='__main__':unittest.main()

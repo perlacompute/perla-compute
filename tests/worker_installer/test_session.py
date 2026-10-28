@@ -49,3 +49,44 @@ class SessionTests(unittest.TestCase):
  def test_https_and_plain_origin_are_required_before_any_request(self):
   for endpoint in ['http://perla.test','https://user:key@perla.test','https://perla.test/path']:
    with self.assertRaises(RuntimeError):s.call('pairing/start',{},endpoint=endpoint)
+ def connect_args(self,**changes):
+  return types.SimpleNamespace(wallet='0x'+'1'*40,worker='home-4090',endpoint=None,**changes)
+ def connection_response(self):
+  return {'state':'connected','id':'public-worker','address':'0x'+'1'*40,'name':'home-4090','endpoint':s.ENDPOINT,'protocol':'perla-pearl-plain-v4'}
+ def test_public_wallet_and_name_need_no_browser_or_private_key(self):
+  output=io.StringIO()
+  with patch.object(s,'call',return_value=self.connection_response()) as request,patch.object(s.secrets,'token_hex',return_value='e'*64),contextlib.redirect_stdout(output):s.connect(self.root,self.connect_args(),w)
+  self.assertEqual(request.call_args.args,('worker/connect',{'wallet':'0x'+'1'*40,'name':'home-4090'},'e'*64,s.ENDPOINT))
+  self.assertEqual(w.configuration(self.root)['PERLA_WORKER_TOKEN'],'e'*64);self.assertNotIn('e'*64,output.getvalue())
+  self.assertFalse((self.root/'config/pending-connection.json').exists());self.assertEqual((self.root/'config/worker.env').stat().st_mode&0o077,0)
+ def test_lost_connection_response_reuses_credential_and_identity(self):
+  with patch.object(s,'call',side_effect=RuntimeError('unreachable')),contextlib.redirect_stdout(io.StringIO()):
+   with self.assertRaises(RuntimeError):s.connect(self.root,self.connect_args(),w)
+  pending=json.loads((self.root/'config/pending-connection.json').read_text());self.assertEqual((self.root/'config/pending-connection.json').stat().st_mode&0o077,0)
+  with patch.object(s,'call',return_value=self.connection_response()) as request,contextlib.redirect_stdout(io.StringIO()):s.connect(self.root,self.connect_args(),w)
+  self.assertEqual(request.call_args.args[2],pending['token'])
+ def test_connection_response_cannot_silently_change_payout(self):
+  response={**self.connection_response(),'address':'0x'+'2'*40}
+  with patch.object(s,'call',return_value=response):
+   with self.assertRaisesRegex(RuntimeError,'payout'):s.connect(self.root,self.connect_args(),w)
+  self.assertFalse((self.root/'config/worker.env').exists())
+ def test_existing_connection_rejects_wallet_or_name_changes(self):
+  w.atomic(self.root/'config/worker.env',('PERLA_ENDPOINT='+s.ENDPOINT+'\nPERLA_WORKER_TOKEN='+'a'*64+'\n').encode())
+  original=(self.root/'config/worker.env').read_bytes()
+  args=self.connect_args();args.wallet='0x'+'2'*40
+  with patch.object(s,'call',return_value=self.connection_response()):
+   with self.assertRaisesRegex(RuntimeError,'retained'):s.connect(self.root,args,w)
+  self.assertEqual((self.root/'config/worker.env').read_bytes(),original)
+ def test_unsafe_names_and_zero_wallet_are_rejected_before_registration(self):
+  for name in ['rig01; touch /tmp/unsafe','$(whoami)','x\ny','--bad','..']:
+   args=self.connect_args();args.worker=name
+   with patch.object(s,'call') as request,patch.object(s.sys.stdin,'isatty',return_value=False):
+    with self.assertRaises(RuntimeError):s.connect(self.root,args,w)
+    request.assert_not_called()
+  args=self.connect_args();args.wallet='0x'+'0'*40
+  with patch.object(s,'call') as request:
+   with self.assertRaises(RuntimeError):s.connect(self.root,args,w)
+   request.assert_not_called()
+ def test_start_flags_are_available_in_installed_cli(self):
+  args=w.parser().parse_args(['start','--wallet','0x'+'1'*40,'--worker','rig01','--device','0'])
+  self.assertEqual(args.worker,'rig01');self.assertEqual(args.wallet,'0x'+'1'*40)

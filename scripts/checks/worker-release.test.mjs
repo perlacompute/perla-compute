@@ -12,7 +12,7 @@ try {
  await build({entryPoints:['lib/perla/worker-release-server.ts'],outfile:join(temp,'server.mjs'),bundle:true,platform:'node',format:'esm'});
  await build({entryPoints:['lib/perla/worker-release.ts'],outfile:join(temp,'commands.mjs'),bundle:true,platform:'node',format:'esm'});
  const {createWorkerReleaseResolver}=await import(pathToFileURL(join(temp,'server.mjs')));
- const {workerRelease:r,workerCommands}=await import(pathToFileURL(join(temp,'commands.mjs')));
+ const {workerRelease:r,workerCommands,namedWorkerCommand}=await import(pathToFileURL(join(temp,'commands.mjs')));
  const hash=x=>createHash('sha256').update(x).digest('hex');
  function fixture(){
   const manifest={schema:1,repository:r.repository,version:r.version,tag:r.tag,chainId:r.chainId,protocol:r.protocol,upstreamCommit:r.upstreamCommit,profiles:{rtx:{archive:'perla-rtx-worker.tar.gz'},hopper:{archive:'perla-worker.tar.gz'}}};
@@ -51,5 +51,11 @@ try {
   }
  });
  await test('device injection and invalid profiles are rejected',()=>{for(const d of [-1,1.5,256,'0;id'])assert.throws(()=>workerCommands('rtx',d));assert.throws(()=>workerCommands('other'));});
+ await test('named worker commands reject shell input and preserve payout routing',()=>{
+  const wallet='0x'+'1'.repeat(40);const cmd=namedWorkerCommand(wallet,'home-4090',0);assert(cmd.includes('--wallet '+wallet+' --worker home-4090'));assert(!cmd.includes(' login'));
+  assert.equal(spawnSync('bash',['-n'],{input:cmd,encoding:'utf8'}).status,0);
+  for(const name of ['x;id','$(id)','--flag','rig\n','..','a'.repeat(49)])assert.throws(()=>namedWorkerCommand(wallet,name));
+  for(const address of ['0x'+'0'.repeat(40),wallet+'\n',wallet+';id'])assert.throws(()=>namedWorkerCommand(address,'rig01'));
+ });
  console.log(`${passed} worker-release checks passed.`);
 } finally {await rm(temp,{recursive:true,force:true});}

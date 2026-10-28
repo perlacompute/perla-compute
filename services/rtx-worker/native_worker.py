@@ -77,7 +77,7 @@ def installed_source(root):
     state = json.loads(regular(root / 'current.json', 1024 * 1024))
     directory = root / 'versions' / (state.get('release','') + '-rtx')
     if (state.get('schema') != 1 or state.get('repository') != 'perlacompute/perla-compute'
-            or state.get('release') not in (RELEASE,'worker-v0.6.0') or state.get('profile') != 'rtx'
+            or state.get('release') not in (RELEASE,'worker-v0.6.0','worker-v0.7.0') or state.get('profile') != 'rtx'
             or state.get('directory') != str(directory) or state.get('upstreamCommit') != UPSTREAM):
         raise NativeError('Use the existing verified worker-v0.5.0 RTX installation.')
     for name, expected in inventory().items():

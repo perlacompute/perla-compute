@@ -16,7 +16,7 @@ The policy definitions are `lib/perla/work-profiles.json`, also shipped in the R
 
 Each job stores its protocol, bits, points, profile and policy hash at issuance. Changing a profile does not reprice an existing job. One job can be credited once. After the UTC epoch closes and outstanding jobs expire, rewards use the existing deterministic integer allocation and largest-remainder method. The operator still chooses budgets and publishes roots; this is an offchain coordinator, not a permissionless onchain proof verifier.
 
-Fresh policy state is inactive. Worker setup is now `perla login` followed by `perla start`. Reports upload through the authenticated worker connection; operators do not ask miners to copy files to the website VPS.
+Fresh policy state is inactive. Worker setup is `perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1`. The public address routes rewards; it does not authenticate wallet ownership. Browser wallet approval remains required for account management and claims. Reports upload through the authenticated worker connection; operators do not ask miners to copy files to the website VPS.
 
 For a controlled trial, run on the website VPS:
 

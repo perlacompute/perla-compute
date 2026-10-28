@@ -107,7 +107,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await db.prepare('INSERT INTO mining_policy_state(id,profile_id,start_epoch,activated_at,validation_hash,validation_family,validation_version) VALUES(1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET profile_id=excluded.profile_id,start_epoch=excluded.start_epoch,activated_at=excluded.activated_at,validation_hash=excluded.validation_hash,validation_family=excluded.validation_family,validation_version=excluded.validation_version').bind(profile!.id,start,now,await digest(canonical(report)),String(device.computeCapability),'0.5.0').run();
    return json(await workPolicy(e));
   }
-  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
+  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
   if(path==='rewards/account'&&r.method==='GET'){
    const address=await account(r,db,now);const before=url.searchParams.get('before');
    if(before!==null&&!/^\d{1,15}$/.test(before))fail(400,'Invalid reward page cursor.');
@@ -157,7 +157,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    originCheck(r);const address=await account(r,db,now);const b=await body(r);
    await throttle(db,`new-worker:${address}`,8,now,3600);
    if(typeof b.name!=='string'||!b.name.trim()||b.name.trim().length>48)fail(400,'Worker name must be 1–48 characters.');
-   const count=await db.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE address=? AND revoked IS NULL').bind(address).first<{n:number}>();if((count?.n??0)>=32)fail(409,'Revoke an unused worker before creating another. The active-worker limit is 32 per wallet.');
+   const count=await db.prepare('SELECT COUNT(*) AS n FROM mining_workers w WHERE address=? AND revoked IS NULL AND NOT EXISTS(SELECT 1 FROM mining_public_workers p WHERE p.worker_id=w.id)').bind(address).first<{n:number}>();if((count?.n??0)>=32)fail(409,'Revoke an unused worker before creating another. The authenticated-worker limit is 32 per wallet.');
    const name=(b.name as string).trim();const id=crypto.randomUUID();const token=randomToken();
    await db.prepare('INSERT INTO mining_workers (id,address,name,token_hash,created) VALUES (?,?,?,?,?)').bind(id,address,name,await digest(token),now).run();
    return json({id,token,address,name,endpoint:url.origin,protocol:PROTOCOL,upstreamCommit:UPSTREAM_COMMIT},201);

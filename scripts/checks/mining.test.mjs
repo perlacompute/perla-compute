@@ -52,6 +52,41 @@ try{
  await login(a);await login(b);
  await test('worker creation requires the authenticated cookie',async()=>assert.equal((await call('workers',{method:'POST',body:{name:'No auth'}})).status,401));
  const w=await add();const other=await add(b);
+ await test('public wallet-and-name registration is idempotent and grants no account session',async()=>{
+  const token='ab'.repeat(32),opts={method:'POST',token,body:{wallet:a.address,name:'home-4090'}};
+  const rs=await Promise.all([call('worker/connect',opts),call('worker/connect',opts)]);
+  assert(rs.every(r=>r.status===200));const first=await rs[0].json(),second=await rs[1].json();assert.equal(first.id,second.id);assert.equal(first.address,a.address.toLowerCase());assert.equal(first.walletOwnershipVerified,false);
+  assert.equal(rs[0].headers.get('set-cookie'),null);assert(!JSON.stringify(first).includes(token));assert.equal((await call('account',{token})).status,401);
+  const stored=await db.prepare('SELECT token_hash FROM mining_workers WHERE id=?').bind(first.id).first();assert.notEqual(stored.token_hash,token);
+  const dashboard=await(await call('account',{cookie:cookies.get(a.address)})).json();assert(dashboard.workers.some(x=>x.id===first.id&&x.name==='home-4090'));
+  assert.equal((await call('worker/connect',{...opts,body:{wallet:b.address,name:'home-4090'}})).status,409);
+  assert.equal((await call('worker/connect',{...opts,body:{wallet:a.address,name:'renamed'}})).status,409);
+  assert.equal((await call('work',{token})).status,503);
+  await call('workers/'+first.id,{method:'DELETE',cookie:cookies.get(a.address)});
+  assert.equal((await call('worker/connect',opts)).status,409);assert.equal((await call('worker/status',{token})).status,401);
+  await db.prepare('DELETE FROM mining_public_workers WHERE worker_id=?').bind(first.id).run();await db.prepare('DELETE FROM mining_workers WHERE id=?').bind(first.id).run();
+ });
+ await test('worker names do not grant access to another rig with the same label',async()=>{
+  const rows=[];for(const token of ['ac'.repeat(32),'ad'.repeat(32)]){
+   const response=await call('worker/connect',{method:'POST',token,body:{wallet:a.address,name:'rig01'}});assert.equal(response.status,200);rows.push(await response.json());
+  }
+  assert.notEqual(rows[0].id,rows[1].id);
+  for(const row of rows){await db.prepare('DELETE FROM mining_public_workers WHERE worker_id=?').bind(row.id).run();await db.prepare('DELETE FROM mining_workers WHERE id=?').bind(row.id).run();}
+ });
+ await test('public connection validates address, secret and shell-safe rig names',async()=>{
+  assert.equal((await call('worker/connect',{method:'POST',body:{wallet:a.address,name:'rig01'}})).status,401);
+  for(const name of ['rig;touch-x','$(whoami)','--flag','rig01\n','..'])assert.equal((await call('worker/connect',{method:'POST',token:'ae'.repeat(32),body:{wallet:a.address,name}})).status,400);
+  assert.equal((await call('worker/connect',{method:'POST',token:'af'.repeat(32),body:{wallet:'0x'+'0'.repeat(40),name:'rig01'}})).status,400);
+ });
+ await test('public registrations cannot exhaust the signed-wallet worker quota',async()=>{
+  for(let i=0;i<32;i++){
+   await db.prepare('INSERT INTO mining_workers(id,address,name,token_hash,created) VALUES(?,?,?,?,?)').bind('quota-fixture-'+i,a.address.toLowerCase(),'fixture-'+i,'quota-token-'+i,0).run();
+   await db.prepare('INSERT INTO mining_public_workers(worker_id,created) VALUES(?,0)').bind('quota-fixture-'+i).run();
+  }
+  const signed=await add();assert(signed.id);
+  for(let i=0;i<32;i++){await db.prepare('DELETE FROM mining_public_workers WHERE worker_id=?').bind('quota-fixture-'+i).run();await db.prepare('DELETE FROM mining_workers WHERE id=?').bind('quota-fixture-'+i).run();}
+  await db.prepare('DELETE FROM mining_workers WHERE id=?').bind(signed.id).run();
+ });
  await test('fresh policy keeps admission closed even when the master switch is enabled',async()=>{assert.equal((await(await call('status')).json()).miningEnabled,false);assert.equal((await call('work',{token:w.token})).status,503);});
  const validation={version:'0.5.0',protocol:'perla-pearl-plain-v4',upstreamCommit:'82e6eee7076aafe10123e08db78f100d270c0582',gpuSelfTestPassed:true,device:{computeCapability:89,name:'TEST ASSERTION ONLY'},cases:[2048,4096].map(k=>({k,fullGemmMatchesReference:true,allTranscriptsMatchReference:true,nativeV3ProofAccepted:true,nonWinningPowRejected:true,changedChallengeRejected:true}))};
 
@@ -136,6 +171,13 @@ try{
  });
  await test('legacy worker requests fail with an explicit upgrade status',async()=>{const request=req('work',{token:w.token});request.headers.delete('x-perla-protocol');assert.equal((await handleMiningRequest(request,env)).status,426);});
  await test('operational worker counts never expose credentials',async()=>{const response=await call('worker/status',{token:w.token});assert.equal(response.status,200);const data=await response.json();assert.equal(data.ledgerCredit,0);assert(!JSON.stringify(data).includes(w.token));assert(data.counts.some(c=>c.kind==='accepted'));});
+ await test('public miner identity earns only after a genuine bound proof reaches the wallet ledger',async()=>{
+  const token='ba'.repeat(32);const connected=await(await call('worker/connect',{method:'POST',token,body:{wallet:b.address,name:'public-4090'}})).json();
+  const publicWorker={id:connected.id,token};const j=await job(publicWorker);assert.equal(j.recipient,b.address.toLowerCase());
+  const receipt=await share(publicWorker,j,fixture(j));assert.equal(receipt.status,201,await receipt.clone().text());
+  const account=await(await call('account',{cookie:cookies.get(b.address)})).json();assert.equal(account.totals.shares,1);assert(account.history.some(s=>s.worker_id===connected.id));
+  assert.equal((await call('rewards/account',{token})).status,401);
+ });
  await test('logout invalidates the browser session',async()=>{await call('auth/logout',{method:'POST',cookie:cookies.get(b.address)});assert.equal((await call('account',{cookie:cookies.get(b.address)})).status,401);});
  console.log(`${passed} mining integration checks passed. Real native PlainProof verification; CPU fixture generation only.`);
 }finally{verifier.kill();db.close();await rm(scratch,{recursive:true,force:true});}

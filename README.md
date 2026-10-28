@@ -109,6 +109,10 @@ The fixed mainnet supply plan is 1B PERL. Mining allocations total 200M: up to 7
 
 Bridge remains coming soon; this release does not deploy/fund mainnet contracts or activate migration. A conversion preview is arithmetic, not an eligibility check. Owner balances and arbitrary testnet transfers do not establish migration rights. The existing testnet distributor enforces funded testnet allocations, not the planned migration or its output limit.
 
-## Worker connection (0.6.0)
+## Worker connection (0.7.0)
 
-Install the pinned GitHub CLI, run `perla login`, approve its matching code in the website with your wallet, then run `perla start --device 0 --shares 1`. Runtime preparation, GPU self-test and authenticated report upload are automatic. An RTX GPU container uses native CUDA when a Docker daemon is unavailable. The existing 4090 native runtime can be reused after source checks. No miner-to-VPS file transfer is required. Project operators review uploaded reports with `bash scripts/perla-trial.sh review` and grant a bounded trial with `bash scripts/perla-trial.sh start [WORKER_ID]`. Public mining admission, reward funding and contracts remain separate.
+Install the pinned GitHub CLI, then run `perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1`. Miner Setup generates the exact install-and-start command. Worker names identify rigs; addresses route contribution rewards. A supplied address is not proof of wallet ownership. No browser login is required for this miner connection; dashboard management and claims still require wallet authorization.
+
+Runtime preparation, actual GPU self-test and authenticated report upload are automatic. An RTX GPU container uses native CUDA when Docker is unavailable; the existing verified 4090 runtime can be reused. A retry after a lost registration response reuses the same private credential rather than duplicating the worker. Saved payout settings cannot be changed by passing different flags. Use a separate `--root` directory for another rig.
+
+This validation release stops after one accepted share by default. Public admission remains paused until the project enables a validated mining policy. Operators can review uploaded reports with `bash scripts/perla-trial.sh review` and admit a one-share trial with `bash scripts/perla-trial.sh start [WORKER_ID]`. No miner-to-VPS file transfer is required. Reward funding and contracts remain separate.
