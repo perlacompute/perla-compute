@@ -14,7 +14,7 @@ Current work protocol: `perla-pearl-plain-v4`; native certificate remains v3 and
 
 The policy definitions are `lib/perla/work-profiles.json`, also shipped in the RTX worker. Reference target: `0x1d00ffff`. Profiles p1/p2/p4/p8/p16 award 1/2/4/8/16 points per verified job. Each target is exactly referenceTarget / points. Native PoW scales by opened tile area and K. V4 admits dense rank-128 work, K 2048..32768, tile area at most 256; this keeps the native target below uint256 overflow. Client-reported speed, GPU name, uptime and attempted work earn no points.
 
-Each job stores its protocol, bits, points, profile and policy hash at issuance. Changing a profile does not reprice an existing job. One job can be credited once. After the UTC epoch closes and outstanding jobs expire, rewards use the existing deterministic integer allocation and largest-remainder method. The operator still chooses budgets and publishes roots; this is an offchain coordinator, not a permissionless onchain proof verifier.
+Each job stores its protocol, bits, points, profile and policy hash at issuance. Changing a profile does not reprice an existing job. One job can be credited once. After the UTC epoch closes and outstanding jobs expire, rewards use the existing deterministic integer allocation and largest-remainder method. The pinned reward schedule derives the budget from the validated mining start epoch and rejects manual overrides. Root publication remains operator controlled; verification is offchain.
 
 Fresh policy state is inactive. Worker setup is `perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1`. The public address routes rewards; it does not authenticate wallet ownership. Browser wallet approval remains required for account management and claims. Reports upload through the authenticated worker connection; operators do not ask miners to copy files to the website VPS.
 
@@ -68,3 +68,10 @@ The restore-check command deliberately does not restore into production. For an 
 GitHub account access is required to create/push the repository. No remote repository is assumed by this source. After connecting, select the actual account/repository, run the publication audit, and push a clean source-only tree. Keep data, environment files, backups, credentials and GPU reports private. Enable GitHub private vulnerability reporting and branch protection in that repository before advertising them.
 
 CI checks software and CUDA compilation on CPU runners; it does not prove physical GPU compatibility. Actions are pinned to reviewed tag commits. A matching version tag triggers checks, a CycloneDX SBOM, checksummed artifacts, build provenance and a draft release. The workflow performs no chain operation or public mining activation. GitHub attestations require the repository/plan to support the feature; review workflow results before publishing a draft.
+
+
+## Daily reward settlement
+
+`bash scripts/perla-rewards.sh` prepares up to 32 closed, unsettled epochs, reviews exact PERL budgets and roots, reads the dedicated testnet owner key silently, funds missing roots, records canonical funding and activates claims. It stores transaction hashes for recovery, never the private key. Rerunning reconciles already funded roots. `review` and `prepare` send no chain transactions; both may idempotently publish prepared manifests.
+
+`perla-rewards-prepare.timer` prepares closed manifests daily and retries every 15 minutes. It has no signing key. Budget enforcement is in the coordinator, not in the deployed distributor. Funding remains explicit. Preparation begins at 00:05 UTC (07:05 WIB). Empty epochs create no allocation and have no rollover. Mainnet remains held.

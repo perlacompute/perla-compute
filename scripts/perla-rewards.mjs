@@ -34,18 +34,13 @@ async function main(){
  }
  if(command==='activate'){if(!/^\d+$/.test(args[0]||''))throw Error('Usage: activate EPOCH');console.log(await operator(`operator/epochs/${args[0]}/activate`));return;}
  if(!['deploy','deploy-test-token','fund'].includes(command))throw Error('Commands: emission DAY | compile | deploy-test-token | deploy | prepare EPOCH BUDGET | fund MANIFEST | activate EPOCH');
+ if(command==='fund')throw Error('Run bash scripts/perla-rewards.sh settle for automatic budget preparation, funding records and activation.');
  const {publicClient,walletClient}=await clients();const compiled=await compileContracts();
  if(command==='deploy'||command==='deploy-test-token'){
   const name=command==='deploy'?'PerlaRewards':'PerlaTestToken';const token=process.env.PERLA_REWARD_TOKEN;
   if(command==='deploy'&&(!token||!isAddress(token)))throw Error('Set PERLA_REWARD_TOKEN to the deployed test token.');
   const hash=await walletClient.deployContract({...compiled[name],args:command==='deploy'?[token]:[]});const receipt=await publicClient.waitForTransactionReceipt({hash});if(receipt.status!=='success')throw Error('Deployment reverted.');console.log(JSON.stringify({contract:name,address:receipt.contractAddress,transaction:hash,chainId:46630},null,2));return;
  }
- const manifest=JSON.parse(await readFile(resolve(args[0]||''),'utf8'));const distributor=process.env.PERLA_DISTRIBUTOR_ADDRESS;const token=process.env.PERLA_REWARD_TOKEN;
- if(manifest.chainId!==46630||manifest.distributor?.toLowerCase()!==distributor?.toLowerCase()||!isAddress(token||''))throw Error('Manifest, distributor, or token configuration mismatch.');
- const actual=await publicClient.readContract({address:distributor,abi:compiled.PerlaRewards.abi,functionName:'rewardToken'});if(actual.toLowerCase()!==token.toLowerCase())throw Error('Distributor uses another token.');
- const budget=BigInt(manifest.budget);if(budget<=0n)throw Error('Invalid budget.');
- const approve=await walletClient.writeContract({address:token,abi:parseAbi(['function approve(address,uint256) returns(bool)']),functionName:'approve',args:[distributor,budget]});
- const approvalReceipt=await publicClient.waitForTransactionReceipt({hash:approve});if(approvalReceipt.status!=='success')throw Error('Approval reverted.');
- const hash=await walletClient.writeContract({address:distributor,abi:compiled.PerlaRewards.abi,functionName:'fundEpoch',args:[BigInt(manifest.epoch),manifest.root,budget]});const receipt=await publicClient.waitForTransactionReceipt({hash});if(receipt.status!=='success')throw Error('Funding reverted.');console.log(JSON.stringify({epoch:manifest.epoch,funded:true,transaction:hash},null,2));
+ throw Error('Manual funding is retired. Run bash scripts/perla-rewards.sh settle to review, fund, record and activate the pinned epoch safely.');
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{console.error(e.shortMessage||e.message||'Reward operation failed.');process.exitCode=1;});

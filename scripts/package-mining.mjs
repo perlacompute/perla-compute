@@ -19,6 +19,8 @@ try{
  await mkdir(join(operator,'lib/perla'),{recursive:true});
  await cp(resolve(root,'lib/perla/emission.mjs'),join(operator,'lib/perla/emission.mjs'));
  await cp(resolve(root,'scripts/perla-audit.mjs'),join(operator,'scripts/perla-audit.mjs'));
+ await cp(resolve(root,'scripts/reward-manifest.mjs'),join(operator,'scripts/reward-manifest.mjs'));
+
  await cp(resolve(root,'scripts/perla-control.mjs'),join(operator,'scripts/perla-control.mjs'));
  await cp(resolve(root,'scripts/reward-allocation.mjs'),join(operator,'scripts/reward-allocation.mjs'));
  await cp(resolve(root,'scripts/perla-rewards.mjs'),join(operator,'scripts/perla-rewards.mjs'));

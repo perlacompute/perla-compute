@@ -11,6 +11,7 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 PERLA_SQLITE_PATH=/app/data/perla.sqlite
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/scripts/start-vps.mjs /app/scripts/migrate-vps.mjs /app/scripts/backup-vps.mjs ./scripts/
+COPY --from=build --chown=node:node /app/scripts/reward-settle.bundle.mjs ./scripts/
 COPY --from=build --chown=node:node /app/lib/vps/sqlite.mjs ./lib/vps/sqlite.mjs
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 RUN mkdir -p /app/data && chown node:node /app/data

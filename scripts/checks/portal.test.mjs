@@ -1,3 +1,4 @@
+import { dailyBudget } from '../../lib/perla/emission.mjs';
 /** Real SQLite, signed-wallet API and local-EVM tests. Seeded ledger rows are test fixtures, not native GPU evidence. */
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
@@ -62,7 +63,8 @@ try {
   const login = await call('auth/verify', { method: 'POST', body: { id: challenge.id, signature } }); assert.equal(login.status, 200); cookie = login.headers.get('set-cookie').split(';')[0];
   const token = await deploy('PerlaTestToken'), distributor = await deploy('PerlaRewards', [token]);
   env.PERLA_REWARD_TOKEN = token; env.PERLA_DISTRIBUTOR_ADDRESS = distributor;
-  const prepared = await call('operator/epochs', { method: 'POST', operator: true, body: { epoch, budget: (1000n * 10n ** 18n).toString() } }); assert.equal(prepared.status, 201, await prepared.clone().text()); const manifest = await prepared.json();
+  await db.prepare('INSERT INTO mining_reward_policy(id,policy,start_epoch,token,distributor,created) VALUES(1,?,?,?,?,?)').bind('perla-testnet-daily-v1',epoch,token.toLowerCase(),distributor.toLowerCase(),Math.floor(Date.now()/1000)).run();
+  const prepared = await call('operator/epochs', { method: 'POST', operator: true, body: { epoch, budget: dailyBudget(1).toString() } }); assert.equal(prepared.status, 200, await prepared.clone().text()); const manifest = await prepared.json();
   await test('published epoch overview exposes the exact allocation budget and recipient count', async () => { const v = await value('epochs'); assert.equal(v.items[0].budget, manifest.budget); assert.equal(v.items[0].recipients, 1); assert.equal(v.items[0].state, 'prepared'); });
   await test('manifest download preserves a reproducible Merkle allocation', async () => { const r = await call('epochs/' + epoch + '/manifest'); assert.equal(r.status, 200); assert.match(r.headers.get('content-disposition'), /attachment/); const m = await r.json(); assert.equal(m.root, manifest.root); assert.equal(m.allocations.reduce((sum, a) => sum + BigInt(a.amount), 0n).toString(), m.budget); assert(!('snapshot' in m)); });
   await test('an unfunded allocation stays pending and cannot become claimable', async () => { const v = await value('rewards/account', { authenticated: true }); assert.equal(v.items[0].status, 'pending'); assert.equal(v.items[0].verification, 'unfunded'); assert.equal(v.items[0].tokenInfo.symbol, 'PERL'); });

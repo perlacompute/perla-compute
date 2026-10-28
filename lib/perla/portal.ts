@@ -158,7 +158,7 @@ export async function publicPortalResponse(request: Request, env: PortalEnv): Pr
   const url = new URL(request.url); const path = url.pathname.replace(/^\/api\/mining\/?/, '');
   if (request.method !== 'GET' || !(/^(treasury|overview|explorer(?:\/[^/]+)?|epochs(?:\/\d+(?:\/manifest)?)?)$/.test(path))) return null;
   try {
-    if (path === 'treasury') return json(await treasurySnapshot(env));
+    if (path === 'treasury') return json(await treasurySnapshot(env, url.searchParams.has('before') ? integer(url.searchParams.get('before')!, 'treasury cursor') : undefined));
     if (path === 'overview') return json(await portalOverview(env));
     if (path === 'explorer') return json(await explorerRecords(env, url));
     if (path.startsWith('explorer/')) return json(await explorerReceipt(env, path.slice(9)));

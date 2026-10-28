@@ -1,3 +1,4 @@
+import { configureRewardPolicy, prepareRewardEpoch, rewardSummary, settlementQueue, RewardScheduleError } from './reward-schedule';
 import { onboardingRequest, trialFor } from './onboarding';
 import type { MiningDatabase } from './database';
 import { recoverMessageAddress, isAddress, createPublicClient, http, type Address } from 'viem';
@@ -108,10 +109,13 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    return json(await workPolicy(e));
   }
   if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
+  if(path==='rewards/summary'&&r.method==='GET')return json(await rewardSummary(e,now));
+  if(path==='operator/rewards/configure'&&r.method==='POST'){await operator(r,e);return json(await configureRewardPolicy(e,now));}
+  if(path==='operator/rewards'&&r.method==='GET'){await operator(r,e);return json(await settlementQueue(e,now));}
   if(path==='rewards/account'&&r.method==='GET'){
    const address=await account(r,db,now);const before=url.searchParams.get('before');
    if(before!==null&&!/^\d{1,15}$/.test(before))fail(400,'Invalid reward page cursor.');
-   return json(await accountRewards(e,address,before===null?undefined:Number(before)));
+   return json({...await accountRewards(e,address,before===null?undefined:Number(before)),current:await rewardSummary(e,now,address)});
   }
   if(path==='auth/challenge'&&r.method==='POST'){
    originCheck(r);const b=await body(r);const address=wallet(b.address);
@@ -210,29 +214,17 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await db.prepare('UPDATE mining_reward_epochs SET funding_tx=?,funding_block=?,funding_block_hash=? WHERE epoch=?').bind(trace!.transaction,trace!.block,trace!.blockHash,epoch).run();return json(trace);
   }
   if(path==='operator/epochs'&&r.method==='POST'){
-   await operator(r,e);const b=await body(r);const epoch=Number(b.epoch);
-   if(!Number.isSafeInteger(epoch)||epoch<0||now<(epoch+1)*86400+JOB_TTL)fail(400,'Only fully closed epochs can be prepared.');
-   if(typeof b.budget!=='string'||!/^\d{1,78}$/.test(b.budget))fail(400,'Budget must be token base units.');
-   const distributor=wallet(e.PERLA_DISTRIBUTOR_ADDRESS) as Address;const token=wallet(e.PERLA_REWARD_TOKEN);
-   const rows=await db.prepare('SELECT address, SUM(points) AS points FROM mining_shares WHERE epoch=? GROUP BY address ORDER BY address LIMIT 5001').bind(epoch).all<{address:Address;points:number}>();
-   if(rows.results.length>5000)fail(400,'Epoch exceeds this release’s allocation limit.');
-   const manifest=createManifest(epoch,BigInt(b.budget as string),distributor,rows.results);const snapshot=await digest(JSON.stringify(rows.results));
-   await db.prepare('INSERT INTO mining_reward_epochs (epoch,snapshot,manifest,root,budget,distributor,token,state,created) VALUES (?,?,?,?,?,?,?,\'prepared\',?)').bind(epoch,snapshot,JSON.stringify(manifest),manifest.root,b.budget,distributor,token,now).run();
-   return json({...manifest,snapshot,state:'prepared'},201);
+   await operator(r,e);const b=await body(r);return json(await prepareRewardEpoch(e,Number(b.epoch),now,b.budget));
   }
   if(path.match(/^operator\/epochs\/\d+$/)&&r.method==='GET'){
    await operator(r,e);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(Number(path.split('/').at(-1))).first();return row?json(row):json({error:'Epoch not found.'},404);
   }
   if(path.match(/^operator\/epochs\/\d+\/activate$/)&&r.method==='POST'){
-   await operator(r,e);const epoch=Number(path.split('/')[2]);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{root:`0x${string}`;budget:string;distributor:Address;token:Address}>();if(!row)fail(404,'Epoch not found.');
-   const rpc=e.PERLA_RPC_URL||'https://rpc.testnet.chain.robinhood.com';if(!rpc.startsWith('https://'))fail(503,'Reward RPC requires HTTPS.');
-   const client=createPublicClient({transport:http(rpc,{timeout:15000,retryCount:0})});
-   if(await client.getChainId()!==CHAIN_ID)fail(409,'Reward RPC is on the wrong chain.');
-   const token=await client.readContract({address:row!.distributor,abi:rewardsAbi,functionName:'rewardToken'});
-   const [root,budget]=await client.readContract({address:row!.distributor,abi:rewardsAbi,functionName:'epochs',args:[BigInt(epoch)]});
-   if(token.toLowerCase()!==row!.token.toLowerCase()||root.toLowerCase()!==row!.root.toLowerCase()||budget!==BigInt(row!.budget))fail(409,'Funded contract does not match this reward manifest.');
+   await operator(r,e);const epoch=Number(path.split('/')[2]);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{epoch:number;root:`0x${string}`;budget:string;distributor:Address;token:Address;funding_tx:`0x${string}`|null}>();if(!row)fail(404,'Epoch not found.');
+   if(!row!.funding_tx)fail(409,'Record the canonical funding transaction before activation.');
+   try{await verifyFunding(e,row!,row!.funding_tx!);}catch{fail(409,'The recorded funding transaction is not canonical or does not match.');}
    await db.prepare("UPDATE mining_reward_epochs SET state='active' WHERE epoch=?").bind(epoch).run();return json({epoch,state:'active'});
   }
   return json({error:'Endpoint not found.'},404);
- }catch(error){if(error instanceof HttpError)return json({error:error.message},error.status,error.status===503||error.status===429?{'Retry-After':'10'}:{});return json({error:'Mining service could not complete this request. No unverified work was credited.'},503);}
+ }catch(error){if(error instanceof HttpError||error instanceof RewardScheduleError)return json({error:error.message},error.status,error.status===503||error.status===429?{'Retry-After':'10'}:{});return json({error:'Mining service could not complete this request. No unverified work was credited.'},503);}
 }
