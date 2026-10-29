@@ -63,13 +63,16 @@ export async function reconnectRequest(r: Request, c: Context): Promise<Response
     c.origin(); const address = await c.account(), b = await c.body();
     await c.throttle('worker-reconnect-owner:' + address, 30);
     if (typeof b.code !== 'string' || !codePattern.test(b.code)) c.fail(400, 'Enter the confirmation code shown on the new GPU machine.');
-    const row = await db.prepare('SELECT p.*,w.address,w.name,w.revoked,w.token_hash FROM mining_worker_reconnects p JOIN mining_workers w ON w.id=p.worker_id WHERE p.code_hash=? AND p.expires>? AND w.address=?').bind(await digest(b.code as string), now, address).first<RequestRow & Worker>();
-    if (!row) c.fail(404, 'This reconnect request is expired or belongs to another wallet.');
+    const row = await db.prepare('SELECT p.*,w.address,w.name,w.revoked,w.token_hash FROM mining_worker_reconnects p JOIN mining_workers w ON w.id=p.worker_id WHERE p.code_hash=? AND w.address=?').bind(await digest(b.code as string), address).first<RequestRow & Worker>();
+    if (!row) c.fail(404, 'This reconnect request is unavailable or belongs to another wallet.');
+    const completed = !!row!.consumed && row!.token_hash === row!.new_token_hash && row!.revoked === null;
+    if (row!.consumed && !completed) c.fail(409, 'This machine request was cancelled or replaced. Inspect the worker in Compute & mining.');
+    if (!completed && row!.expires <= now) c.fail(410, 'Reconnect approval expired. Run the same start command again on the GPU machine.');
     if (action === 'approve' && !row!.consumed && row!.approved_at === null) {
       await db.prepare('UPDATE mining_worker_reconnects SET approved_at=?,approved_address=?,prior_token_hash=(SELECT token_hash FROM mining_workers w WHERE w.id=mining_worker_reconnects.worker_id AND w.address=?) WHERE id=? AND expires>? AND approved_at IS NULL AND consumed=0 AND EXISTS(SELECT 1 FROM mining_workers w WHERE w.id=mining_worker_reconnects.worker_id AND w.address=?)').bind(now, address, address, row!.id, now, address).run();
     }
     const approved = await db.prepare('SELECT approved_at,consumed FROM mining_worker_reconnects WHERE id=?').bind(row!.id).first<{ approved_at: number | null; consumed: number }>();
-    return json({ workerId: row!.worker_id, name: row!.name, address: row!.address, expires: row!.expires, approved: approved!.approved_at !== null, completed: !!approved!.consumed, replacesOldMachine: true });
+    return json({ workerId: row!.worker_id, name: row!.name, address: row!.address, expires: row!.expires, approved: approved!.approved_at !== null, completed: !!approved!.consumed && row!.token_hash === row!.new_token_hash && row!.revoked === null, replacesOldMachine: true });
   }
   return json({ error: 'Reconnect endpoint not found.' }, 404);
 }

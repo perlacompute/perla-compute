@@ -3,7 +3,7 @@
 import argparse,fcntl,hashlib,io,json,os,platform,re,shlex,shutil,stat,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 REPO='perlacompute/perla-compute'
-DEFAULT_RELEASE='worker-v0.8.0'
+DEFAULT_RELEASE='worker-v0.8.1'
 SCHEMA=1
 class WorkerError(Exception):pass
 

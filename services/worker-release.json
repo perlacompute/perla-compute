@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "repository": "perlacompute/perla-compute",
-  "tag": "worker-v0.8.0",
-  "version": "0.8.0",
+  "tag": "worker-v0.8.1",
+  "version": "0.8.1",
   "chainId": 46630,
   "protocol": "perla-pearl-plain-v4",
   "upstreamCommit": "82e6eee7076aafe10123e08db78f100d270c0582",

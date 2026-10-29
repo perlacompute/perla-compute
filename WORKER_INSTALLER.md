@@ -1,6 +1,6 @@
 # Perla worker installation and permanent identity
 
-Guides remain at https://perlacompute.xyz/platform/setup and /docs. GitHub distributes the pinned worker-v0.8.0 installer and archives. The Linux installer verifies checksums before execution, uses a private installation root and does not automatically start mining. A wallet private key is never required on the GPU host.
+Guides remain at https://perlacompute.xyz/platform/setup and /docs. GitHub distributes the pinned worker-v0.8.1 installer and archives. The Linux installer verifies checksums before execution, uses a private installation root and does not automatically start mining. A wallet private key is never required on the GPU host.
 
 ## Create a worker
 
@@ -26,4 +26,4 @@ Rerun the same command after a terminal or connection interruption. Pending secr
 
 ## Runtime and compatibility
 
-CLI commands include doctor, build, selftest, start, status, logs, stop, version and update. RTX uses Docker when its daemon is reachable, otherwise the supported native CUDA path. Hopper retains its separate model-serving path and explicit model options. Proof protocol and GPU core remain 0.5.0-compatible; the raw legacy protocol identifier is preserved for API compatibility. Product labels use Perla Matrix v4. Previous releases are immutable and are not overwritten by 0.8.0.
+CLI commands include doctor, build, selftest, start, status, logs, stop, version and update. RTX uses Docker when its daemon is reachable, otherwise the supported native CUDA path. Hopper retains its separate model-serving path and explicit model options. Proof protocol and GPU core remain 0.5.0-compatible; the raw legacy protocol identifier is preserved for API compatibility. Product labels use Perla Matrix v4. Previous releases are immutable and are not overwritten by 0.8.1.

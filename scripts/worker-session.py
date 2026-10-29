@@ -12,7 +12,7 @@ def call(path,payload=None,token=None,endpoint=ENDPOINT):
  u=urllib.parse.urlsplit(endpoint)
  if u.scheme!='https' or u.username or u.password or not u.hostname or u.query or u.fragment or u.path.rstrip('/'):
   raise RuntimeError('Use an HTTPS coordinator origin.')
- headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.8.0'}
+ headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.8.1'}
  if token:headers['authorization']='Bearer '+token
  request=urllib.request.Request(endpoint.rstrip('/')+'/api/mining/'+path,data=None if payload is None else json.dumps(payload).encode(),headers=headers)
  try:

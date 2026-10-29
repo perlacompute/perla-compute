@@ -1,11 +1,10 @@
-# Perla Worker 0.8.0
+# Perla Worker 0.8.1
 
-- Create a new worker with a public reward wallet and display name. The CLI prints its permanent Worker ID.
-- Reuse that ID on a different machine with `perla start --worker-id YOUR_WORKER_ID --device 0`.
-- Sign in with the owner wallet on the approval website, compare the code, and authorize replacement access. No wallet key or file transfer is required on the GPU host.
-- A completed move retains ID, name, reward wallet and accepted history, replaces the old credential, expires unfinished old jobs, and repeats GPU validation on the new machine.
-- Lost responses resume using a privately saved pending credential; an ID alone grants no access.
-- Existing worker 0.7.0 credentials remain usable until revoked or replaced. This release does not change native proof mathematics, the mining policy, reward budgets or mainnet status. The GPU/proof core remains version 0.5.0.
-- The default validation command stops after one accepted share. `--shares N` chooses a bounded larger test. It does not add a continuous unattended mining mode.
+- Fix native RTX startup after installer upgrades and worker reconnection. Verified 0.8.0 and 0.8.1 installations are now recognized while the pinned GPU/proof core and file integrity checks remain enforced.
+- Reuse a matching verified native build cache. A fresh GPU host builds locally and must pass its own GPU self-test. No historical GPU result is substituted.
+- After a successful reconnect, rerun `perla start --device 0 --shares 1` using the connection already saved on the new machine. No second approval or worker recreation is required.
+- Website reconnect checks retry transient network failures, clear recovered errors, stop after completion, and cancel stale requests when the wallet or code changes.
+- The owning wallet can confirm a completed active transfer after the approval deadline. Cancelled, superseded and expired pending requests cannot authorize a transfer.
+- Worker IDs, reward wallets, accepted history, proof mathematics, mining policy and reward budgets are retained. The GPU/proof core remains 0.5.0. Old releases and assets remain immutable. Mainnet and Bridge remain closed.
 
-Installer/session/release tests, signed wallet + SQLite reconnect scenarios, production build and browser checks cover the stated software behavior. This release does not claim a new physical GPU validation or independent security audit. Reconnection itself creates no contribution points or token rewards.
+Software tests exercise installation, native-source verification, cache reuse, reconnect authorization and network recovery. Physical GPU mining after this fix remains a deployment validation; no new GPU run or independent security audit is claimed.

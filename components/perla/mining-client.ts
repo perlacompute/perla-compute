@@ -6,10 +6,15 @@ import { brand } from '@/lib/auren/brand';
 export type Worker = { id: string; name: string; created: number; last_seen: number | null; revoked: number | null; miner_version?:string|null; architecture?:string|null; last_error?:string|null };
 export type Share = { id: string; job_id: string; worker_id: string; epoch: number; proof_hash: string; accepted: number; points: number };
 export type MiningAccount = { address: string; workers: Worker[]; history: Share[]; totals: { shares: number; points: number }; miningEnabled: boolean; diagnostics?:{worker_id:string;kind:string;count:number}[] };
+export class MiningApiError extends Error {
+  constructor(message: string, public readonly status: number) { super(message); this.name = 'MiningApiError'; }
+}
 export async function miningApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch('/api/mining/' + path, { ...options, cache: 'no-store', headers: { 'Content-Type': 'application/json', ...options.headers } });
-  const data = await response.json();
-  if (!response.ok) throw Error(data.error || 'This request could not be completed.');
+  let data;
+  try { data = await response.json(); }
+  catch { throw new MiningApiError('The server response could not be read. Please retry.', response.ok ? 502 : response.status); }
+  if (!response.ok) throw new MiningApiError(data.error || 'This request could not be completed.', response.status);
   return data as T;
 }
 export const short = (value: string, length = 8) => value.length > length * 2 ? `${value.slice(0, length)}…${value.slice(-length)}` : value;
@@ -39,9 +44,9 @@ export function useMiningAccount() {
   const reload = useCallback(async () => {
     try {
       const response = await fetch('/api/mining/account', { cache: 'no-store' });
-      if (response.status === 401) { setAccount(null); address.current = null; return; }
+      if (response.status === 401) { setAccount(null); address.current = null; setError(''); return; }
       const data = await response.json(); if (!response.ok) throw Error(data.error || 'Account unavailable.');
-      setAccount(data); address.current = data.address;
+      setAccount(data); address.current = data.address; setError('');
     } catch (e) { setError(e instanceof Error ? e.message : 'Account unavailable.'); }
     finally { setLoading(false); }
   }, []);

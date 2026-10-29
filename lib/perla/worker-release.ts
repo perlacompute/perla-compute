@@ -1,8 +1,8 @@
 export const workerRelease = {
-  repository: 'perlacompute/perla-compute', version: '0.8.0', tag: 'worker-v0.8.0',
+  repository: 'perlacompute/perla-compute', version: '0.8.1', tag: 'worker-v0.8.1',
   protocol: 'perla-pearl-plain-v4', chainId: 46630,
-  page: 'https://github.com/perlacompute/perla-compute/releases/tag/worker-v0.8.0',
-  base: 'https://github.com/perlacompute/perla-compute/releases/download/worker-v0.8.0/',
+  page: 'https://github.com/perlacompute/perla-compute/releases/tag/worker-v0.8.1',
+  base: 'https://github.com/perlacompute/perla-compute/releases/download/worker-v0.8.1/',
   upstreamCommit: '82e6eee7076aafe10123e08db78f100d270c0582',
   assets: ['install.sh', 'install.py', 'worker-release.json', 'perla-rtx-worker.tar.gz', 'perla-worker.tar.gz', 'SHA256SUMS'],
 } as const;

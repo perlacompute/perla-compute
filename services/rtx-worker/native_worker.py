@@ -21,7 +21,9 @@ import urllib.parse
 KIT = Path(__file__).resolve().parent
 UPSTREAM = '82e6eee7076aafe10123e08db78f100d270c0582'
 PROTOCOL = 'perla-pearl-plain-v4'
-RELEASE = 'worker-v0.5.0'
+RELEASE = 'worker-v0.5.0'  # Pinned GPU/proof core and compatible native build cache.
+SUPPORTED_INSTALL_RELEASES = (RELEASE, 'worker-v0.6.0', 'worker-v0.7.0',
+                              'worker-v0.8.0', 'worker-v0.8.1')
 RUST = '1.99.1'
 VERSION = '0.1.0'
 
@@ -77,9 +79,9 @@ def installed_source(root):
     state = json.loads(regular(root / 'current.json', 1024 * 1024))
     directory = root / 'versions' / (state.get('release','') + '-rtx')
     if (state.get('schema') != 1 or state.get('repository') != 'perlacompute/perla-compute'
-            or state.get('release') not in (RELEASE,'worker-v0.6.0','worker-v0.7.0') or state.get('profile') != 'rtx'
+            or state.get('release') not in SUPPORTED_INSTALL_RELEASES or state.get('profile') != 'rtx'
             or state.get('directory') != str(directory) or state.get('upstreamCommit') != UPSTREAM):
-        raise NativeError('Use the existing verified worker-v0.5.0 RTX installation.')
+        raise NativeError('Use a verified, supported Perla RTX installation. Update the CLI from the website guide.')
     for name, expected in inventory().items():
         if Path(name).name != name or state.get('inventory', {}).get(name) != expected:
             raise NativeError('Installed worker inventory differs: ' + name)
