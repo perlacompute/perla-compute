@@ -3,6 +3,8 @@ import json,os,re,secrets,socket,sys,time,urllib.error,urllib.parse,urllib.reque
 from pathlib import Path
 
 ENDPOINT='https://perlacompute.xyz'
+class CoordinatorError(RuntimeError):
+ def __init__(self,message,status):super().__init__(message);self.status=status
 class NoRedirect(urllib.request.HTTPRedirectHandler):
  def redirect_request(self,*args):return None
 
@@ -10,7 +12,7 @@ def call(path,payload=None,token=None,endpoint=ENDPOINT):
  u=urllib.parse.urlsplit(endpoint)
  if u.scheme!='https' or u.username or u.password or not u.hostname or u.query or u.fragment or u.path.rstrip('/'):
   raise RuntimeError('Use an HTTPS coordinator origin.')
- headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.7.0'}
+ headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.8.0'}
  if token:headers['authorization']='Bearer '+token
  request=urllib.request.Request(endpoint.rstrip('/')+'/api/mining/'+path,data=None if payload is None else json.dumps(payload).encode(),headers=headers)
  try:
@@ -18,7 +20,7 @@ def call(path,payload=None,token=None,endpoint=ENDPOINT):
  except urllib.error.HTTPError as e:
   try:message=json.loads(e.read(12000)).get('error','Coordinator request failed')
   except (ValueError,AttributeError):message='Coordinator request failed'
-  raise RuntimeError(str(message).replace(token or '__no_token__','[redacted]')) from None
+  raise CoordinatorError(str(message).replace(token or '__no_token__','[redacted]'),e.code) from None
  except (urllib.error.URLError,TimeoutError):raise RuntimeError('Coordinator unreachable; your local installation was retained.') from None
 
 def login(root,installed,cli,name=None,endpoint=ENDPOINT):
@@ -50,8 +52,64 @@ def upload(root,report,cli):
  print('GPU report uploaded automatically. Worker '+result['workerId']+'; no mining credit created.',flush=True)
  return result
 
+def reconnect(root,args,cli):
+ """Keep an existing ID on a new machine using an owner-approved credential rotation."""
+ target=getattr(args,'worker_id',None)
+ pending_path=root/'config/pending-reconnect.json'
+ pending=json.loads(cli.regular(pending_path,4000)) if pending_path.exists() else None
+ if not target and pending:target=pending['workerId']
+ if not target:return False
+ if not re.fullmatch(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}',target):raise RuntimeError('Use the full permanent Worker ID copied from your dashboard.')
+ if getattr(args,'wallet',None) or getattr(args,'worker',None):raise RuntimeError('--worker-id retains the existing wallet and name. Use it without --wallet or --worker.')
+ endpoint=getattr(args,'endpoint',None) or ENDPOINT
+ if (root/'config/worker.env').exists():
+  config=cli.configuration(root)
+  if endpoint!=config['PERLA_ENDPOINT']:raise RuntimeError('The saved installation uses another coordinator. Use a separate --root installation.')
+  try:current=call('worker/status',token=config['PERLA_WORKER_TOKEN'],endpoint=endpoint)
+  except CoordinatorError as error:
+   if error.status!=401:raise
+   metadata=root/'config/connection.json'
+   if not metadata.exists() or json.loads(cli.regular(metadata,4000)).get('id')!=target:raise RuntimeError('The saved installation cannot be matched to this Worker ID. Its settings were retained. Use a fresh --root installation.') from None
+  else:
+   if current.get('id')!=target:raise RuntimeError('This installation already uses another Worker ID. Its connection was retained. Use a separate --root installation.')
+   if pending:pending_path.unlink()
+   print('Reusing permanent Worker ID: '+target,flush=True);return True
+ if pending and (pending.get('workerId')!=target or pending.get('endpoint')!=endpoint):raise RuntimeError('A reconnect is pending for another worker or coordinator. Its connection was retained.')
+ if not pending:
+  pending={'workerId':target,'endpoint':endpoint,'token':secrets.token_hex(32),'code':secrets.token_hex(6).upper()}
+  cli.atomic(pending_path,(json.dumps(pending)+'\n').encode())
+ payload={k:pending[k] for k in ['workerId','code']}
+ try:result=call('worker/reconnect/start',payload,pending['token'],endpoint)
+ except CoordinatorError as error:
+  if error.status==410:
+   pending_path.unlink();raise RuntimeError('The previous reconnect was superseded. Run the same command again for a fresh approval.') from None
+  raise
+ if result.get('state')!='connected':
+  expected=endpoint.rstrip('/')+'/platform/reconnect?code='+pending['code']
+  if result.get('verificationUrl')!=expected or result.get('workerId')!=target:raise RuntimeError('Reconnect response does not match this machine. Its pending credential was retained.')
+  print('Keep Worker ID: '+target+'\nOpen this URL in your wallet browser:\n'+expected+'\nCompare code: '+pending['code']+'\nApprove with the worker owner wallet. The old machine will lose access. No transaction or wallet private key is needed on this GPU host.\nWaiting for owner approval…',flush=True)
+  deadline=min(time.time()+600,result['expires'])
+  while time.time()<deadline:
+   time.sleep(5)
+   try:result=call('worker/reconnect/exchange',{'workerId':target},pending['token'],endpoint)
+   except CoordinatorError as error:
+    if error.status==410 or error.status==409 and 'moved after approval' in str(error):
+     pending_path.unlink();raise RuntimeError('Reconnect expired or another machine replaced it. Run the same command again for a fresh approval.') from None
+    raise
+   if result.get('state')=='connected':break
+   if result.get('state')!='pending':raise RuntimeError('Unexpected reconnect response. Retry the same command.')
+  else:raise RuntimeError('Approval timed out. Run the same command again; no worker history was deleted.')
+ if result.get('id')!=target or result.get('endpoint')!=endpoint or result.get('protocol')!='perla-pearl-plain-v4' or not re.fullmatch(r'0x[0-9a-f]{40}',str(result.get('address',''))) or not isinstance(result.get('name'),str):raise RuntimeError('Reconnect identity check failed. The pending credential was retained.')
+ # Connection metadata is non-secret; write it first so a lost final file write can retry safely.
+ cli.atomic(root/'config/connection.json',(json.dumps({k:result[k] for k in ['id','address','name','endpoint']})+'\n').encode())
+ cli.atomic(root/'config/worker.env',('PERLA_ENDPOINT='+endpoint+'\nPERLA_WORKER_TOKEN='+pending['token']+'\n').encode())
+ pending_path.unlink()
+ print('Worker reconnected: '+result['name']+'\nWorker ID: '+target+'\nReward wallet unchanged: '+result['address']+'\nHistory retained. The previous machine credential is disabled.',flush=True)
+ return True
+
 def connect(root,args,cli):
  """Payout routing only. Never requests a wallet key, signature, or browser login."""
+ if reconnect(root,args,cli):return
  config_path=root/'config/worker.env'
  wallet=getattr(args,'wallet',None);name=getattr(args,'worker',None)
  endpoint=getattr(args,'endpoint',None) or ENDPOINT
@@ -88,7 +146,7 @@ def connect(root,args,cli):
  cli.atomic(config_path,('PERLA_ENDPOINT='+endpoint+'\nPERLA_WORKER_TOKEN='+pending['token']+'\n').encode())
  cli.atomic(root/'config/connection.json',(json.dumps({k:result[k] for k in ['id','address','name','endpoint']})+'\n').encode())
  pending_path.unlink()
- print('Worker: '+name+'\nReward wallet: '+pending['address']+'\nConnection saved privately. View this wallet in the Perla dashboard.',flush=True)
+ print('Worker: '+name+'\nWorker ID: '+result['id']+'\nReward wallet: '+pending['address']+'\nSave this permanent ID for a future machine move. Reuse it with --worker-id and owner approval.\nConnection saved privately. View this wallet in the Perla dashboard.',flush=True)
 
 def dispatch(root,installed,args,cli):
  if args.command=='login':

@@ -44,10 +44,10 @@ async function account(r:Request,db:MiningDatabase,now:number){
   const a=await db.prepare('SELECT address FROM mining_auth_sessions WHERE hash=? AND expires>?').bind(await digest(token!),now).first<{address:string}>();
   return a?.address??fail(401,'Your wallet session expired.');
 }
-type Worker={id:string;address:string;name:string;revoked:number|null};
+type Worker={id:string;address:string;name:string;revoked:number|null;token_hash:string};
 async function worker(r:Request,db:MiningDatabase,now:number){
   const token=bearer(r);if(!/^[a-f0-9]{64}$/.test(token))fail(401,'A worker token is required.');
-  const w=await db.prepare('SELECT id,address,name,revoked FROM mining_workers WHERE token_hash=? AND revoked IS NULL').bind(await digest(token)).first<Worker>();
+  const w=await db.prepare('SELECT id,address,name,revoked,token_hash FROM mining_workers WHERE token_hash=? AND revoked IS NULL').bind(await digest(token)).first<Worker>();
   if(!w)fail(401,'Worker token is invalid or revoked.');
   return w!;
 }
@@ -108,7 +108,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await db.prepare('INSERT INTO mining_policy_state(id,profile_id,start_epoch,activated_at,validation_hash,validation_family,validation_version) VALUES(1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET profile_id=excluded.profile_id,start_epoch=excluded.start_epoch,activated_at=excluded.activated_at,validation_hash=excluded.validation_hash,validation_family=excluded.validation_family,validation_version=excluded.validation_version').bind(profile!.id,start,now,await digest(canonical(report)),String(device.computeCapability),'0.5.0').run();
    return json(await workPolicy(e));
   }
-  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND revoked IS NULL').bind(now,w.id).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
+  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND token_hash=? AND revoked IS NULL').bind(now,w.id,w.token_hash).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
   if(path==='rewards/summary'&&r.method==='GET')return json(await rewardSummary(e,now));
   if(path==='operator/rewards/configure'&&r.method==='POST'){await operator(r,e);return json(await configureRewardPolicy(e,now));}
   if(path==='operator/rewards'&&r.method==='GET'){await operator(r,e);return json(await settlementQueue(e,now));}
@@ -168,7 +168,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   }
   if(path.startsWith('workers/')&&r.method==='DELETE'){
    originCheck(r);const address=await account(r,db,now);const id=path.slice(8);
-   await db.prepare('UPDATE mining_workers SET revoked=? WHERE id=? AND address=? AND revoked IS NULL').bind(now,id,address).run();return json({ok:true});
+   await db.batch([db.prepare('UPDATE mining_workers SET revoked=? WHERE id=? AND address=? AND revoked IS NULL').bind(now,id,address),db.prepare('UPDATE mining_worker_reconnects SET expires=0 WHERE worker_id=? AND consumed=0 AND EXISTS(SELECT 1 FROM mining_workers w WHERE w.id=? AND w.address=?)').bind(id,id,address)]);return json({ok:true});
   }
   if(path==='work'&&r.method==='GET'){
    const w=await worker(r,db,now);await throttle(db,`work:${w.id}`,120,now);
@@ -177,9 +177,10 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    if(!policy.miningEnabled&&trial)policy.profile=profileFor('p1');
    const h=await verifierCall(e,'/health');if(h.ready!==true)fail(503,'The native verifier is not ready.');
    const version=r.headers.get('x-perla-version');const arch=r.headers.get('x-perla-architecture');
-   await db.prepare('UPDATE mining_workers SET last_seen=?,miner_version=?,architecture=? WHERE id=? AND revoked IS NULL').bind(now,version&&/^[0-9.a-z-]{1,24}$/.test(version)?version:null,arch&&/^(86|89|90|120)$/.test(arch)?arch:null,w.id).run();
+   await db.prepare('UPDATE mining_workers SET last_seen=?,miner_version=?,architecture=? WHERE id=? AND token_hash=? AND revoked IS NULL').bind(now,version&&/^[0-9.a-z-]{1,24}$/.test(version)?version:null,arch&&/^(86|89|90|120)$/.test(arch)?arch:null,w.id,w.token_hash).run();
    let job=await db.prepare("SELECT j.* FROM mining_jobs j LEFT JOIN mining_shares s ON s.job_id=j.id WHERE j.worker_id=? AND j.expires>? AND j.protocol='perla-pearl-plain-v4' AND s.id IS NULL ORDER BY j.created DESC LIMIT 1").bind(w.id,now).first<{id:string;header:string;expires:number;epoch:number;share_bits:number;work_points:number;policy_hash:string;profile_id:string;created:number}>();
-   if(!job){const id=crypto.randomUUID();const epoch=currentEpoch(now);const header=await makeJobHeader(url.origin,w.id,w.address,epoch,id,now,policy.profile.bits);await db.prepare('INSERT INTO mining_jobs (id,worker_id,epoch,header,created,expires,protocol,share_bits,work_points,policy_hash,profile_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id,w.id,epoch,header,now,now+JOB_TTL,PROTOCOL,policy.profile.bits,policy.profile.points,policy.hash,policy.profile.id).run();job={id,header,expires:now+JOB_TTL,epoch,created:now,share_bits:policy.profile.bits,work_points:policy.profile.points,policy_hash:policy.hash,profile_id:policy.profile.id};}
+   if(!job){const id=crypto.randomUUID();const epoch=currentEpoch(now);const header=await makeJobHeader(url.origin,w.id,w.address,epoch,id,now,policy.profile.bits);await db.prepare('INSERT INTO mining_jobs (id,worker_id,epoch,header,created,expires,protocol,share_bits,work_points,policy_hash,profile_id) SELECT ?,id,?,?,?,?,?,?,?,?,? FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(id,epoch,header,now,now+JOB_TTL,PROTOCOL,policy.profile.bits,policy.profile.points,policy.hash,policy.profile.id,w.id,w.token_hash).run();if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed. Use the new machine credential.');job={id,header,expires:now+JOB_TTL,epoch,created:now,share_bits:policy.profile.bits,work_points:policy.profile.points,policy_hash:policy.hash,profile_id:policy.profile.id};}
+   if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed. Use the current machine credential.');
    return json({id:job.id,epoch:job.epoch,expires:job.expires,protocol:PROTOCOL,chainId:CHAIN_ID,recipient:w.address,workerId:w.id,created:job.created,workPolicy:{hash:job.policy_hash,profile:job.profile_id,points:job.work_points,bits:job.share_bits},mining_job:{incomplete_header_bytes:job.header,target:compactTarget(job.share_bits).toString(),cert_version:CERT_VERSION}});
   }
   if(path==='shares'&&r.method==='POST'){
@@ -202,7 +203,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    if(result.proof_hash!==proofHash||result.header_hash!==headerHash)fail(503,'Verifier response binding failed.');
    // Re-check expiry/revocation/finalization at commit time. The unique job index makes concurrent submissions idempotent.
    const id=crypto.randomUUID();const accepted=seconds();
-   const inserted=await db.prepare('INSERT OR IGNORE INTO mining_shares (id,job_id,worker_id,address,epoch,proof_hash,accepted,points) SELECT ?,j.id,w.id,w.address,j.epoch,?,?,j.work_points FROM mining_jobs j JOIN mining_workers w ON w.id=j.worker_id WHERE j.id=? AND j.expires>? AND w.revoked IS NULL AND NOT EXISTS(SELECT 1 FROM mining_reward_epochs e WHERE e.epoch=j.epoch) AND (? OR EXISTS(SELECT 1 FROM mining_worker_trials t WHERE t.worker_id=w.id AND t.expires>? AND (SELECT COUNT(*) FROM mining_shares s WHERE s.worker_id=t.worker_id AND s.accepted>=t.created)<t.max_shares))').bind(id,proofHash,accepted,j!.id,accepted,publicAdmission?1:0,accepted).run();
+   const inserted=await db.prepare('INSERT OR IGNORE INTO mining_shares (id,job_id,worker_id,address,epoch,proof_hash,accepted,points) SELECT ?,j.id,w.id,w.address,j.epoch,?,?,j.work_points FROM mining_jobs j JOIN mining_workers w ON w.id=j.worker_id WHERE j.id=? AND j.expires>? AND w.revoked IS NULL AND w.token_hash=? AND NOT EXISTS(SELECT 1 FROM mining_reward_epochs e WHERE e.epoch=j.epoch) AND (? OR EXISTS(SELECT 1 FROM mining_worker_trials t WHERE t.worker_id=w.id AND t.expires>? AND (SELECT COUNT(*) FROM mining_shares s WHERE s.worker_id=t.worker_id AND s.accepted>=t.created)<t.max_shares))').bind(id,proofHash,accepted,j!.id,accepted,w.token_hash,publicAdmission?1:0,accepted).run();
    if(inserted.meta.changes!==1)fail(409,'Job was credited, expired, revoked, or its epoch is closed.');
    await recordWorker(db,w.id,'accepted');
    return json({id,accepted:true,points:j!.work_points,epoch:j!.epoch,proofHash,tokenReward:null},201);

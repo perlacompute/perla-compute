@@ -3,7 +3,7 @@
 import argparse,fcntl,hashlib,io,json,os,platform,re,shlex,shutil,stat,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 REPO='perlacompute/perla-compute'
-DEFAULT_RELEASE='worker-v0.7.0'
+DEFAULT_RELEASE='worker-v0.8.0'
 SCHEMA=1
 class WorkerError(Exception):pass
 
@@ -271,6 +271,7 @@ def parser():
    s.add_argument('--shares',type=int,default=1,help='Accepted shares before stopping; this validation release defaults to 1')
    s.add_argument('--interval',type=float,default=10);s.add_argument('--model');s.add_argument('--tensor-parallel-size',type=int,default=2)
    s.add_argument('--wallet',help='Public EVM reward address; never a private key');s.add_argument('--worker',help='Rig name, for example rig01');s.add_argument('--endpoint',help='HTTPS coordinator origin')
+   s.add_argument('--worker-id',help='Reuse a permanent Worker ID on a new machine; requires owner-wallet approval')
  sub.add_parser('status');sub.add_parser('stop');l=sub.add_parser('logs');l.add_argument('--tail',type=int,default=100);sub.add_parser('version')
  login=sub.add_parser('login');login.add_argument('--name');login.add_argument('--endpoint',default='https://perlacompute.xyz')
  upload=sub.add_parser('upload-validation');upload.add_argument('--file',required=True)

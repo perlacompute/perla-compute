@@ -1,8 +1,9 @@
+import { reconnectRequest } from './worker-reconnect';
 import type { MiningDatabase } from './database';
 import { digest, randomToken, PROTOCOL, UPSTREAM_COMMIT } from './protocol';
 import { canonical } from './work-policy';
 import { isAddress } from 'viem';
-type Context = {
+export type Context = {
  db: MiningDatabase; now: number; path: string;
  body: () => Promise<Record<string,unknown>>; origin: () => void;
  account: () => Promise<string>; worker: () => Promise<{id:string;address:string}>;
@@ -20,6 +21,7 @@ export async function trialFor(db:MiningDatabase,workerId:string,now:number){
 const respond=(v:unknown,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export async function onboardingRequest(r:Request,c:Context):Promise<Response|null>{
  const {db,now,path}=c; const url=new URL(r.url);
+ const reconnect=await reconnectRequest(r,c);if(reconnect)return reconnect;
  if(path==='worker/connect'&&r.method==='POST'){
   // Public payout routing grants no wallet session, management rights or claim authority.
   // A client-generated secret makes a lost-response retry idempotent without exposing it.
@@ -85,7 +87,9 @@ export async function onboardingRequest(r:Request,c:Context):Promise<Response|nu
   const w=await c.worker();await c.throttle('worker-validation:'+w.id,6);const b=await c.body();
   if(!validGpuReport(b.report))c.fail(400,'Both actual GPU cases and all correctness/proof checks must pass.');
   const report=canonical(b.report),hash=await digest(report);
-  await db.prepare('INSERT INTO mining_worker_validations(worker_id,report,hash,created) VALUES(?,?,?,?) ON CONFLICT(worker_id) DO UPDATE SET report=excluded.report,hash=excluded.hash,created=excluded.created').bind(w.id,report,hash,now).run();
+  const currentHash=await digest(r.headers.get('authorization')?.replace(/^Bearer /,'')||'');
+  const inserted=await db.prepare('INSERT INTO mining_worker_validations(worker_id,report,hash,created) SELECT id,?,?,? FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL ON CONFLICT(worker_id) DO UPDATE SET report=excluded.report,hash=excluded.hash,created=excluded.created').bind(report,hash,now,w.id,currentHash).run();
+  if(inserted.meta.changes!==1)c.fail(401,'Worker access changed. Use the current machine credential.');
   return respond({uploaded:true,workerId:w.id,hash,review:'worker-reported; operator review required',ledgerCredit:0});
  }
  if(path==='operator/validations'&&r.method==='GET'){

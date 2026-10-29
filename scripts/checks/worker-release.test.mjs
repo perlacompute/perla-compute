@@ -12,7 +12,7 @@ try {
  await build({entryPoints:['lib/perla/worker-release-server.ts'],outfile:join(temp,'server.mjs'),bundle:true,platform:'node',format:'esm'});
  await build({entryPoints:['lib/perla/worker-release.ts'],outfile:join(temp,'commands.mjs'),bundle:true,platform:'node',format:'esm'});
  const {createWorkerReleaseResolver}=await import(pathToFileURL(join(temp,'server.mjs')));
- const {workerRelease:r,workerCommands,namedWorkerCommand}=await import(pathToFileURL(join(temp,'commands.mjs')));
+ const {workerRelease:r,workerCommands,namedWorkerCommand,existingWorkerCommand}=await import(pathToFileURL(join(temp,'commands.mjs')));
  const hash=x=>createHash('sha256').update(x).digest('hex');
  function fixture(){
   const manifest={schema:1,repository:r.repository,version:r.version,tag:r.tag,chainId:r.chainId,protocol:r.protocol,upstreamCommit:r.upstreamCommit,profiles:{rtx:{archive:'perla-rtx-worker.tar.gz'},hopper:{archive:'perla-worker.tar.gz'}}};
@@ -56,6 +56,11 @@ try {
   assert.equal(spawnSync('bash',['-n'],{input:cmd,encoding:'utf8'}).status,0);
   for(const name of ['x;id','$(id)','--flag','rig\n','..','a'.repeat(49)])assert.throws(()=>namedWorkerCommand(wallet,name));
   for(const address of ['0x'+'0'.repeat(40),wallet+'\n',wallet+';id'])assert.throws(()=>namedWorkerCommand(address,'rig01'));
+ });
+ await test('existing-ID commands preserve the UUID and reject shell or malformed input',()=>{
+  const id='8683902e-dc8c-40ba-9eb3-5ac2293e243b',command=existingWorkerCommand(id,0);
+  assert(command.includes('--worker-id '+id+' --device 0'));assert(!command.includes('--wallet'));assert.equal(spawnSync('bash',['-n'],{input:command,encoding:'utf8'}).status,0);
+  for(const value of [id+';id',id+'\n','testing','--flag','0'.repeat(36)])assert.throws(()=>existingWorkerCommand(value,0));
  });
  console.log(`${passed} worker-release checks passed.`);
 } finally {await rm(temp,{recursive:true,force:true});}

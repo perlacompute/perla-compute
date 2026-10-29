@@ -1,28 +1,29 @@
-# Perla worker installer
+# Perla worker installation and permanent identity
 
-The complete participant tutorial stays on the website: **https://perlacompute.xyz/platform/setup**. Requirements and validation scope: https://perlacompute.xyz/docs.
+Guides remain at https://perlacompute.xyz/platform/setup and /docs. GitHub distributes the pinned worker-v0.8.0 installer and archives. The Linux installer verifies checksums before execution, uses a private installation root and does not automatically start mining. A wallet private key is never required on the GPU host.
 
-GitHub Releases distributes the versioned installer, source worker packages and SHA-256 checksums. The first release is `worker-v0.5.0`, a validation preview. The release does not establish physical GPU validation or enable public admission.
+## Create a worker
 
-After that release is published in a public repository:
+After installing, run:
 
 ```bash
-curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
-  https://github.com/perlacompute/perla-compute/releases/download/worker-v0.5.0/install.sh \
-  -o install-perla.sh
-bash install-perla.sh --profile rtx
+"$HOME/.local/bin/perla" start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1
 ```
 
-Use `--profile hopper` for the separate H100/H200 vLLM adapter. This installer requires Linux x86-64, Python 3 and curl. GPU operations require Docker Buildx, NVIDIA Container Toolkit and the profile's supported hardware/driver. The installer does not install or modify GPU drivers, run a model or start mining.
+The connection creates and prints a permanent Worker ID. The reward wallet and name are saved locally. Starting later with no identity flags reuses the saved connection. The default is a one-share validation run, and `--shares N` chooses a bounded larger test.
 
-The default command is `$HOME/.local/bin/perla`. If that directory is absent from PATH, invoke the printed absolute command path or add it to your shell PATH. Use `--root` and `--bin-dir` to select separate installation locations; existing unrelated commands are preserved.
+## Move an existing worker
 
-The command supports `doctor`, `build`, `configure --file /path/to/worker.env`, `selftest`, `start`, `status`, `logs`, `stop`, `version`, and `update --release worker-vX.Y.Z`. The standalone `selftest` applies to RTX. The Hopper model/inference validation procedure remains in the website documentation; Hopper `start` requires an explicit `--model`.
+Copy its full ID from Compute & mining. On the new machine, run:
 
-Download `worker.env` from your signed-in dashboard. It contains only your coordinator origin and a revocable worker token. Wallet private keys and recovery phrases do not belong in worker configuration.
+```bash
+"$HOME/.local/bin/perla" start --worker-id YOUR_WORKER_ID --device 0 --shares 1
+```
 
-RTX `start` defaults to one accepted share for controlled validation. The worker checks the GPU before requesting work. A paused coordinator or a failed check may stop it without accepted work. `start` reporting a container ID is not proof of a successful share; inspect its status, logs and the website receipt. Containers do not automatically restart after an uncertain submission or failed run.
+Open the URL printed in the GPU terminal, connect the worker owner wallet, compare the confirmation code and authorize the new machine. The existing wallet/name stay with the ID. A completed exchange disables the prior credential and expires unfinished old jobs, while preserving accepted work and reward records. The new GPU runs its own checks before requesting work. No worker.env file transfer is needed. A public Worker ID alone cannot authorize the move.
 
-Updates require an explicit release tag and a stopped worker. Credentials remain in a separate private file. The current and previous version metadata are retained. A published release's existing assets are verified and never overwritten by the release helper.
+Rerun the same command after a terminal or connection interruption. Pending secrets are retained privately for idempotent recovery. Reuse an ID for a replacement machine; independently operating rigs need distinct IDs. A previously revoked worker can be restored through fresh owner approval.
 
-Public installation requires a public release repository. Publication tooling retains the repository's current visibility; it never makes the application repository public automatically.
+## Runtime and compatibility
+
+CLI commands include doctor, build, selftest, start, status, logs, stop, version and update. RTX uses Docker when its daemon is reachable, otherwise the supported native CUDA path. Hopper retains its separate model-serving path and explicit model options. Proof protocol and GPU core remain 0.5.0-compatible; the raw legacy protocol identifier is preserved for API compatibility. Product labels use Perla Matrix v4. Previous releases are immutable and are not overwritten by 0.8.0.

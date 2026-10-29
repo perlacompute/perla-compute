@@ -75,3 +75,8 @@ CI checks software and CUDA compilation on CPU runners; it does not prove physic
 `bash scripts/perla-rewards.sh` prepares up to 32 closed, unsettled epochs, reviews exact PERL budgets and roots, reads the dedicated testnet owner key silently, funds missing roots, records canonical funding and activates claims. It stores transaction hashes for recovery, never the private key. Rerunning reconciles already funded roots. `review` and `prepare` send no chain transactions; both may idempotently publish prepared manifests.
 
 `perla-rewards-prepare.timer` prepares closed manifests daily and retries every 15 minutes. It has no signing key. Budget enforcement is in the coordinator, not in the deployed distributor. Funding remains explicit. Preparation begins at 00:05 UTC (07:05 WIB). Empty epochs create no allocation and have no rollover. Mainnet remains held.
+
+
+## Permanent worker identities — CLI 0.8.0
+
+Use the wallet-bound Worker ID to move a rig, rather than recreating it by name. On a fresh GPU machine install the pinned 0.8.0 worker and run `perla start --worker-id YOUR_WORKER_ID --device 0`. The CLI stores a private pending credential, opens a wallet-owner approval URL, and resumes polling without printing or transferring that credential. The website requires its authenticated wallet session and explicit same-origin approval. A completed exchange rotates the hashed credential atomically, expires only unfinished old jobs, clears old hardware validations/trials, and preserves the worker row, accepted shares and reward roots. Work issuance, validation upload and share commit check the current credential at write time. Revoking access also expires outstanding reconnect approvals. Distinct simultaneous rigs should use distinct Worker IDs.

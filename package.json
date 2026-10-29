@@ -20,14 +20,15 @@
     "check:emission": "node scripts/checks/emission.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:source": "node scripts/checks/source-audit.mjs",
-    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:reward-plan",
+    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:worker-reconnect && npm run check:reward-plan",
     "check:portal": "node scripts/checks/portal.test.mjs",
     "check:rtx": "python3 services/rtx-worker/test_protocol.py",
     "check:operations": "python3 scripts/checks/operations_test.py",
     "check:policy": "node scripts/checks/policy.test.mjs",
     "check:worker-release": "node scripts/checks/worker-release.test.mjs",
     "check:reward-plan": "node scripts/checks/reward-plan.test.mjs",
-    "check:reward-settlement": "node scripts/checks/reward-settlement.test.mjs"
+    "check:reward-settlement": "node scripts/checks/reward-settlement.test.mjs",
+    "check:worker-reconnect": "node scripts/checks/worker-reconnect.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

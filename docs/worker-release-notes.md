@@ -1,10 +1,11 @@
-Perla Worker 0.5.0 adds a verified GitHub installer and a local lifecycle command for the existing worker sources.
+# Perla Worker 0.8.0
 
-- Linux x86-64 packages: RTX 30/40/50 matrix worker and the separate H100/H200 vLLM adapter.
-- Explicit version selection, checksum verification, bounded archive extraction and isolated version directories.
-- Private dashboard worker configuration, diagnostics, build, controlled start, status, logs, stop and explicit updates.
-- Full tutorial: https://perlacompute.xyz/platform/setup
+- Create a new worker with a public reward wallet and display name. The CLI prints its permanent Worker ID.
+- Reuse that ID on a different machine with `perla start --worker-id YOUR_WORKER_ID --device 0`.
+- Sign in with the owner wallet on the approval website, compare the code, and authorize replacement access. No wallet key or file transfer is required on the GPU host.
+- A completed move retains ID, name, reward wallet and accepted history, replaces the old credential, expires unfinished old jobs, and repeats GPU validation on the new machine.
+- Lost responses resume using a privately saved pending credential; an ID alone grants no access.
+- Existing worker 0.7.0 credentials remain usable until revoked or replaced. This release does not change native proof mathematics, the mining policy, reward budgets or mainnet status. The GPU/proof core remains version 0.5.0.
+- The default validation command stops after one accepted share. `--shares N` chooses a bounded larger test. It does not add a continuous unattended mining mode.
 
-This is a validation preview. The installer and release pipeline do not attest hardware, activate mining, fund rewards or establish an AI inference service. Physical GPU runs and supervised proof-to-receipt validation remain deployment checks. The standalone GPU self-test is for RTX; Hopper uses its documented model/inference procedure.
-
-The kernel, proof format and pinned upstream source remain unchanged: 82e6eee7076aafe10123e08db78f100d270c0582. Upstream and third-party license notices are retained in both worker packages.
+Installer/session/release tests, signed wallet + SQLite reconnect scenarios, production build and browser checks cover the stated software behavior. This release does not claim a new physical GPU validation or independent security audit. Reconnection itself creates no contribution points or token rewards.

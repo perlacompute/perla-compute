@@ -19,3 +19,8 @@ Public receipt search uses bound SQL parameters and a bounded page size. Cursor 
 Epoch manifests are reconstructed from their points, budget and distributor and compared before publication or account use. A chain mismatch, token mismatch, root/budget mismatch, malformed manifest or unavailable RPC cannot enable a claim.
 
 The public `status` route now derives `claimsEnabled` from activated allocation records. This is a publication/configuration signal; an individual claim still requires the fresh account-level chain check.
+
+
+## Worker identity and machine replacement
+
+A Worker ID is permanent, while a machine credential can be replaced. POST `worker/reconnect/start` uses a new client-generated credential plus a target Worker ID and confirmation code. POST `worker/reconnect/info` and `worker/reconnect/approve` require the same-origin authenticated owner-wallet session. POST `worker/reconnect/exchange` uses the new machine credential, rotates it atomically into the existing worker, expires unfinished old jobs, and clears old validation/trial state. Retries are idempotent for the same request. No private token is returned by these endpoints. The worker ID, wallet, name, creation time and accepted work are retained. Revocation invalidates unconsumed approvals. Code approval expires after 10 minutes.
