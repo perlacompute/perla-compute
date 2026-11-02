@@ -23,6 +23,8 @@ MAX_PROOF_BYTES = 5 * 1024 * 1024
 MAX_BODY = (MAX_PROOF_BYTES * 4 // 3) + 4096
 SHARE_BITS = 0x207fffff
 CURRENT_PROTOCOL = 'perla-pearl-plain-v4'
+ROUND_POLICY = 'perla-rounds-v1'
+ROUND_BITS = {0x1c00ffff, 0x1b7fff80, 0x1b3fffc0, 0x1b1fffe0}
 PROFILE_BITS = {0x1d00ffff, 0x1c7fff80, 0x1c3fffc0, 0x1c1fffe0, 0x1c0ffff0}
 
 
@@ -52,7 +54,15 @@ def verify_native(payload):
         # Native derives this factor from opened tile area and K. Bounding both
         # prevents a custom certificate from restoring the old saturated target.
     valid, _message = pm.verify_plain_proof_for_cert_version(3, header, proof)
+    round_bits = payload.get('round_bits')
+    round_valid = False
+    if round_bits is not None:
+        if protocol != CURRENT_PROTOCOL or type(round_bits) is not int or round_bits not in ROUND_BITS:
+            raise ValueError('Unsupported round target')
+        if valid:
+            round_valid, _round_message = pm.verify_plain_proof_for_cert_version(3, header, proof, nbits_override=round_bits)
     return {
+        'round_valid': bool(round_valid), 'round_bits': round_bits, 'round_target_policy': ROUND_POLICY,
         'valid': bool(valid), 'protocol': protocol, 'upstream_commit': UPSTREAM_COMMIT,
         'header_hash': hashlib.sha256(header_bytes).hexdigest(),
         'proof_hash': hashlib.sha256(proof_bytes).hexdigest(),
@@ -80,6 +90,9 @@ def child():
 
 def check_installation():
     pm = importlib.import_module('pearl_mining')
+    import inspect
+    if 'nbits_override' not in inspect.signature(pm.verify_plain_proof_for_cert_version).parameters:
+        raise RuntimeError('Pinned native target override is required')
     if pm.__version__ != '0.3.1':
         raise RuntimeError('Expected py-pearl-mining 0.3.1 from the pinned checkout')
     source = Path(os.environ['PERLA_PEARL_SOURCE']).resolve()
@@ -121,7 +134,7 @@ def serve(host, port):
                 return self.respond({'error': 'Unauthorized'}, 401)
             if self.path != '/health':
                 return self.respond({'error': 'Not found'}, 404)
-            return self.respond({'ready': True, 'protocol': PROTOCOL, 'upstream_commit': UPSTREAM_COMMIT, 'supported_protocols': [PROTOCOL, CURRENT_PROTOCOL], 'version': '0.5.0', 'mode': 'native-plain-proof', 'profile': 'dense-rank128'})
+            return self.respond({'ready': True, 'protocol': PROTOCOL, 'upstream_commit': UPSTREAM_COMMIT, 'supported_protocols': [PROTOCOL, CURRENT_PROTOCOL], 'version': '0.5.0', 'round_target_policy': ROUND_POLICY, 'mode': 'native-plain-proof', 'profile': 'dense-rank128'})
 
         def do_POST(self):
             if not self.authorized():

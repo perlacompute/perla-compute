@@ -1,3 +1,6 @@
+import { requireRounds,legacyPin,wonRounds,roundRewardSummary } from './reward-rounds';
+import { earnedManifest } from './round-math';
+import { digest } from './protocol';
 import type { MiningDatabase } from './database';
 import { CHAIN_ID, JOB_TTL, currentEpoch } from './protocol';
 import { dailyBudget, EMISSION_POLICY } from './emission.mjs';
@@ -31,48 +34,27 @@ export async function configureRewardPolicy(env: Env, now: number) {
   await db.prepare('INSERT OR IGNORE INTO mining_reward_policy(id,policy,start_epoch,token,distributor,created) VALUES(1,?,?,?,?,?)').bind(EMISSION_POLICY, start!.start_epoch, token, distributor, now).run();
   return (await pinnedRewardPolicy(env))!;
 }
-export async function rewardSummary(env: Env, now: number, address?: string) {
-  const db = dbFor(env), policy = await pinnedRewardPolicy(env), epoch = currentEpoch(now);
-  const totals = await db.prepare('SELECT COUNT(*) AS shares,COALESCE(SUM(points),0) AS points FROM mining_shares WHERE epoch=?').bind(epoch).first<{ shares: number; points: number }>();
-  const own = address ? await db.prepare('SELECT COALESCE(SUM(points),0) AS points FROM mining_shares WHERE epoch=? AND address=?').bind(epoch, address.toLowerCase()).first<{ points: number }>() : null;
-  const day = policy && epoch >= policy.start_epoch ? epoch - policy.start_epoch + 1 : null;
-  const budget = day ? dailyBudget(day) : null;
-  return { chainId: CHAIN_ID, policy: policy?.policy ?? null, configured: !!policy, startEpoch: policy?.start_epoch ?? null,
-    token: policy?.token ?? null, distributor: policy?.distributor ?? null, epoch, day,
-    budget: budget?.toString() ?? null, networkPoints: String(totals?.points ?? 0), acceptedShares: totals?.shares ?? 0,
-    walletPoints: own ? String(own.points) : null,
-    estimatedAmount: own && budget !== null ? (totals!.points > 0 ? budget * BigInt(own.points) / BigInt(totals!.points) : 0n).toString() : null,
-    closesAt: (epoch + 1) * 86400, settlementOpensAt: (epoch + 1) * 86400 + JOB_TTL,
-    latestClosedEpoch: Math.floor((now - JOB_TTL) / 86400) - 1,
-    status: day ? 'scheduled' : 'not_configured', checkedAt: now,
-    funding: 'A scheduled budget is not funded. Claims require a matching funded and activated allocation.',
-    emptyEpochs: 'No accepted work means no allocation, no funding and no rollover.' };
+export const rewardSummary=roundRewardSummary;
+export async function prepareRewardEpoch(env:Env,epoch:number,now:number,requestedBudget?:unknown){
+ const db=dbFor(env),policy=await requireRounds(env),pin=await legacyPin(env);
+ if(!Number.isSafeInteger(epoch)||epoch<policy.cutover_epoch||now<(epoch+1)*86400+JOB_TTL)fail('Only closed round-reward epochs can be prepared.');
+ const saved=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{manifest:string;snapshot:string;state:string}>();
+ if(saved?.state==='cancelled')fail('This allocation was cancelled and cannot be recreated.');
+ if(saved&&JSON.parse(saved.manifest).version!==2)fail('Legacy allocations are held for review; they are not funded by the round schedule.');
+ const rounds=await wonRounds(env,epoch);
+ if(!rounds.length)return {epoch,skipped:true,reason:'No qualifying round was won. Shares alone unlock no reward.',budget:'0'};
+ const manifest=earnedManifest(epoch,pin.distributor,rounds,pin.start_epoch,policy.policy_hash);
+ if(requestedBudget!==undefined&&requestedBudget!==manifest.budget)fail('Budget must equal the sum of earned round rewards.');
+ const snapshot=await digest(JSON.stringify(rounds));
+ if(saved){if(saved.manifest!==JSON.stringify(manifest)||saved.snapshot!==snapshot)fail('Immutable earned allocation differs from its recorded rounds.');return {...manifest,snapshot,state:saved.state};}
+ await db.prepare("INSERT OR IGNORE INTO mining_reward_epochs(epoch,snapshot,manifest,root,budget,distributor,token,state,created) VALUES(?,?,?,?,?,?,?,'prepared',?)").bind(epoch,snapshot,JSON.stringify(manifest),manifest.root,manifest.budget,pin.distributor,pin.token,now).run();
+ const final=await db.prepare('SELECT manifest,snapshot,state FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{manifest:string;snapshot:string;state:string}>();
+ if(final?.manifest!==JSON.stringify(manifest))fail('Concurrent allocation differs; preserve the record for review.');
+ return {...manifest,snapshot,state:final!.state};
 }
-export async function prepareRewardEpoch(env: Env, epoch: number, now: number, requestedBudget?: unknown) {
-  const db = dbFor(env), policy = await pinnedRewardPolicy(env);
-  if (!policy) fail('Pin the reward schedule before preparing an epoch.');
-  if (!Number.isSafeInteger(epoch) || epoch < policy!.start_epoch || now < (epoch + 1) * 86400 + JOB_TTL) fail('Only fully closed epochs within the pinned schedule can be prepared.');
-  const budget = dailyBudget(epoch - policy!.start_epoch + 1).toString();
-  if (requestedBudget !== undefined && requestedBudget !== budget) fail('The epoch budget must equal the pinned daily schedule. Manual overrides are disabled.');
-  const saved = await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{ manifest: string; budget: string; token: string; distributor: string; state: string; snapshot: string }>();
-  if (saved) {
-    if (saved.budget !== budget || saved.token.toLowerCase() !== policy!.token || saved.distributor.toLowerCase() !== policy!.distributor) fail('The existing immutable epoch conflicts with this schedule.');
-    return { ...JSON.parse(saved.manifest), snapshot: saved.snapshot, state: saved.state };
-  }
-  const rows = await db.prepare('SELECT address,SUM(points) AS points FROM mining_shares WHERE epoch=? GROUP BY address ORDER BY address LIMIT 5001').bind(epoch).all<{ address: Address; points: number }>();
-  if (!rows.results.length) return { epoch, skipped: true, reason: 'No accepted work; no allocation or rollover.', budget: '0' };
-  if (rows.results.length > 5000) fail('This epoch exceeds the 5,000-recipient allocation limit.');
-  const manifest = createManifest(epoch, BigInt(budget), policy!.distributor, rows.results);
-  const bytes = new TextEncoder().encode(JSON.stringify(rows.results));
-  const snapshot = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
-  await db.prepare("INSERT OR IGNORE INTO mining_reward_epochs(epoch,snapshot,manifest,root,budget,distributor,token,state,created) VALUES(?,?,?,?,?,?,?,'prepared',?)").bind(epoch, snapshot, JSON.stringify(manifest), manifest.root, budget, policy!.distributor, policy!.token, now).run();
-  const final = await db.prepare('SELECT manifest,snapshot,state FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{ manifest: string; snapshot: string; state: string }>();
-  if (final?.manifest !== JSON.stringify(manifest)) fail('A concurrent epoch preparation differs. Preserve both records for review.');
-  return { ...manifest, snapshot: final!.snapshot, state: final!.state };
-}
-export async function settlementQueue(env: Env, now: number) {
-  const summary = await rewardSummary(env, now), db = dbFor(env);
-  if (!summary.configured) return { summary, items: [], more: false };
-  const rows = await db.prepare("SELECT DISTINCT s.epoch FROM mining_shares s LEFT JOIN mining_reward_epochs e ON e.epoch=s.epoch WHERE s.epoch>=? AND s.epoch<=? AND (e.epoch IS NULL OR e.state<>'active') ORDER BY s.epoch LIMIT 33").bind(summary.startEpoch, summary.latestClosedEpoch).all<{ epoch: number }>();
-  return { summary, items: rows.results.slice(0, 32).map(row => ({ epoch: row.epoch, day: row.epoch - summary.startEpoch! + 1, budget: dailyBudget(row.epoch - summary.startEpoch! + 1).toString() })), more: rows.results.length > 32 };
+export async function settlementQueue(env:Env,now:number){
+ const summary=await roundRewardSummary(env,now),db=dbFor(env);
+ if(!summary.configured||summary.status!=='active')return {summary,items:[],more:false};
+ const policy=(await requireRounds(env)),rows=await db.prepare("SELECT DISTINCT r.epoch FROM mining_reward_rounds r LEFT JOIN mining_reward_epochs e ON e.epoch=r.epoch WHERE r.state='won' AND r.epoch>=? AND r.epoch<=? AND (e.epoch IS NULL OR (e.state='prepared' AND json_extract(e.manifest,'$.version')=2)) ORDER BY r.epoch LIMIT 33").bind(policy.cutover_epoch,Math.floor((now-JOB_TTL)/86400)-1).all<{epoch:number}>();
+ return {summary,items:rows.results.slice(0,32).map(r=>({epoch:r.epoch})),more:rows.results.length>32};
 }

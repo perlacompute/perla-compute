@@ -31,7 +31,7 @@ class NativeInstallationTests(unittest.TestCase):
         cls.assets_tmp = tempfile.TemporaryDirectory()
         folder = Path(cls.assets_tmp.name)
         subprocess.run(['python3', str(ROOT / 'scripts/package-worker-release.py'),
-                        '--output', str(folder), '--tag', 'worker-v0.8.2'],
+                        '--output', str(folder), '--tag', 'worker-v0.9.0'],
                        capture_output=True, check=True)
         cls.assets = {p.name: p.read_bytes() for p in folder.iterdir()}
         cls.code = (ROOT / 'scripts/perla-worker.py').read_bytes()
@@ -51,7 +51,7 @@ class NativeInstallationTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def install(self, release='worker-v0.8.2'):
+    def install(self, release='worker-v0.9.0'):
         bodies = dict(self.assets)
         manifest = json.loads(bodies['worker-release.json'])
         manifest.update(tag=release, version=release.removeprefix('worker-v'))
@@ -79,7 +79,7 @@ class NativeInstallationTests(unittest.TestCase):
 
     def test_verified_081_archive_passes_real_native_source_gate(self):
         installed, native = self.install()
-        self.assertEqual(w.state(self.root)['release'], 'worker-v0.8.2')
+        self.assertEqual(w.state(self.root)['release'], 'worker-v0.9.0')
         self.assertEqual(native.installed_source(self.root), Path(installed['directory']))
 
     def test_080_compatible_core_is_accepted_by_the_fixed_native_launcher(self):
@@ -115,7 +115,7 @@ class NativeInstallationTests(unittest.TestCase):
     def test_wrong_repository_profile_commit_and_future_release_are_rejected(self):
         installed, native = self.install()
         for key, value in [('repository', 'attacker/project'), ('profile', 'hopper'),
-                           ('upstreamCommit', '0' * 40), ('release', 'worker-v0.9.0')]:
+                           ('upstreamCommit', '0' * 40), ('release', 'worker-v0.10.0')]:
             with self.subTest(key=key):
                 changed = {**installed, key: value}
                 w.atomic(self.root / 'current.json', json.dumps(changed).encode())

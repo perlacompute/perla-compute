@@ -23,18 +23,19 @@ export async function settleRewards({ action = 'review', key, expectedPlan, env 
     const value = await response.json(); if (!response.ok) throw Error(value.error || 'Reward operator request failed.'); return value;
   }
   const queue = await operator('operator/rewards');
+  if (queue.summary.policy!=='perla-rounds-v1')throw Error('Round reward policy is not active; legacy full-budget funding is disabled.');
   if (!queue.summary.configured || queue.summary.token !== deployment.token.toLowerCase() || queue.summary.distributor !== deployment.distributor.toLowerCase()) throw Error('Pin the reviewed PERL reward schedule first.');
   const plan = [];
   for (const item of queue.items) {
     const manifest = await operator('operator/epochs', { epoch: item.epoch });
     if (manifest.skipped) continue;
     auditManifest(manifest);
-    if (manifest.epoch < queue.summary.startEpoch || manifest.budget !== dailyBudget(manifest.epoch - queue.summary.startEpoch + 1).toString() || !equal(manifest.distributor, deployment.distributor)) throw Error('Prepared manifest differs from the pinned local budget rules.');
+    if (manifest.epoch < queue.summary.startEpoch || (manifest.version!==2||manifest.policy!=='perla-rounds-v1'||manifest.policyHash!==queue.summary.policyHash||manifest.emissionStartEpoch!==queue.summary.startEpoch||manifest.dailyCap!==dailyBudget(manifest.epoch-queue.summary.startEpoch+1).toString()||BigInt(manifest.budget)>BigInt(manifest.dailyCap)) || !equal(manifest.distributor, deployment.distributor)) throw Error('Prepared manifest differs from the pinned local budget rules.');
     plan.push(manifest);
   }
   const budget = plan.reduce((sum, row) => sum + BigInt(row.budget), 0n);
   const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
-  const report = { planHash, chainId: 46630, action, epochs: plan.map(m => ({ epoch: m.epoch, budgetPERL: formatUnits(BigInt(m.budget), 18), recipients: m.allocations.length, points: m.totalPoints, root: m.root })), totalScheduledPERL: formatUnits(budget, 18), currentEpoch: queue.summary.epoch, settlementOpensAt: queue.summary.settlementOpensAt, more: queue.more, mainnetTransactions: false, transactionsSent: false };
+  const report = { planHash, chainId: 46630, action, epochs: plan.map(m => ({ epoch: m.epoch, budgetPERL: formatUnits(BigInt(m.budget), 18), recipients: m.allocations.length, workUnits: m.totalWork, wonRounds:m.rounds.length, root: m.root })), totalScheduledPERL: formatUnits(budget, 18), currentEpoch: queue.summary.epoch, settlementOpensAt: queue.summary.settlementOpensAt, more: queue.more, mainnetTransactions: false, transactionsSent: false };
   if (action === 'review' && plan.length) {
     try {
       const endpoint = new URL(env.PERLA_RPC_URL || chain.rpcUrls.default.http[0]);
@@ -94,6 +95,7 @@ export async function settleRewards({ action = 'review', key, expectedPlan, env 
   }
   const completed = [];
   for (const m of plan) {
+    const latest=await operator('operator/epochs/'+m.epoch);if(!['prepared','active'].includes(latest.state)||latest.root!==m.root||latest.manifest&&JSON.parse(latest.manifest).version!==2)throw Error('Allocation changed or was cancelled before funding. No new funding transaction was sent.');
     let state = await client.readContract({ address: deployment.distributor, abi: distributorAbi, functionName: 'epochs', args: [BigInt(m.epoch)] });
     let hash;
     if (state[0] === zero) {

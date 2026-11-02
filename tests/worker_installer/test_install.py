@@ -31,7 +31,7 @@ class InstallerTests(unittest.TestCase):
   self.data[name]=data;self.data['SHA256SUMS']=''.join(w.digest(v)+'  '+n+'\n' for n,v in self.data.items() if n!='SHA256SUMS').encode()
  def test_installs_verified_rtx_without_starting_or_building(self):
   s=self.install();self.assertEqual(w.state(self.root)['release'],w.DEFAULT_RELEASE);self.assertTrue((self.bin/'perla').exists());self.assertEqual(self.calls,[]);self.assertFalse((self.root/'config/worker.env').exists())
-  self.assertEqual(s['image'],'perla-rtx-worker:0.8.2');self.assertNotIn('contracts',s['inventory'])
+  self.assertEqual(s['image'],'perla-rtx-worker:0.9.0');self.assertNotIn('contracts',s['inventory'])
  def test_packaged_rtx_build_tag_does_not_reuse_the_old_single_share_image(self):
   s=self.install();directory=Path(s['directory'])
   self.assertIn(s['image'],(directory/'setup-worker.sh').read_text())

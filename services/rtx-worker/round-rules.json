@@ -1,0 +1,30 @@
+{
+  "policy": "perla-rounds-v1",
+  "chainId": 46630,
+  "certificateVersion": 3,
+  "targetSeconds": 194,
+  "dailyRoundLimit": 446,
+  "windowMultiplier": 2,
+  "minimumWorkUnits": 256,
+  "maximumWorkUnits": 2048,
+  "retargetRounds": 16,
+  "maximumRecipients": 5000,
+  "targets": [
+    {
+      "workUnits": 256,
+      "bits": 469827583
+    },
+    {
+      "workUnits": 512,
+      "bits": 461373312
+    },
+    {
+      "workUnits": 1024,
+      "bits": 457179072
+    },
+    {
+      "workUnits": 2048,
+      "bits": 455081952
+    }
+  ]
+}

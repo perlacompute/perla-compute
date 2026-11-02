@@ -18,6 +18,12 @@ UPSTREAM_COMMIT = '82e6eee7076aafe10123e08db78f100d270c0582'
 MAX_LINE = (5 * 1024 * 1024 * 4 // 3) + 4096
 
 
+class CoordinatorError(ValueError):
+    def __init__(self, message, status=None, code=None, credited=None):
+        super().__init__(message)
+        self.status, self.code, self.credited = status, code, credited
+
+
 class PerlaClient:
     def __init__(self, endpoint, token):
         u = urllib.parse.urlparse(endpoint)
@@ -31,7 +37,7 @@ class PerlaClient:
 
     def call(self, path, payload=None):
         raw = json.dumps(payload).encode() if payload is not None else None
-        headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json','X-Perla-Protocol':PROTOCOL,'X-Perla-Version':'0.5.0'}
+        headers={'Authorization':'Bearer '+self.token,'Content-Type':'application/json','X-Perla-Protocol':PROTOCOL,'X-Perla-Version':'0.9.0','X-Perla-Reward-Policy':'perla-rounds-v1'}
         if str(self.architecture) in ('86','89','90','120'):headers['X-Perla-Architecture']=str(self.architecture)
         req = urllib.request.Request(self.endpoint + '/api/mining/' + path, data=raw, headers=headers)
         # Redirects must never forward a worker credential to another origin.
@@ -46,10 +52,12 @@ class PerlaClient:
                 return json.loads(data)
         except urllib.error.HTTPError as error:
             try:
-                message = json.loads(error.read(4096)).get('error', 'Coordinator rejected the request')
+                detail = json.loads(error.read(4096))
+                if not isinstance(detail, dict):detail = {}
+                message = detail.get('error', 'Coordinator rejected the request')
             except (ValueError, TypeError):
                 message = 'Coordinator unavailable or private. Check the endpoint and worker access.'
-            raise ValueError(message) from None
+            raise CoordinatorError(message, error.code, locals().get('detail', {}).get('code'), locals().get('detail', {}).get('credited')) from None
 
 
 class Bridge:
@@ -93,7 +101,7 @@ class Bridge:
             if submitted.get('cert_version') != 3 or int(submitted.get('target', 0)) != int(job['mining_job']['target']):
                 raise ValueError('Mining job parameters were changed')
             receipt = await asyncio.to_thread(self.client.call, 'shares', {'jobId': job['id'], 'plainProof': params['plain_proof']})
-            print(json.dumps({'event': 'accepted_share', 'id': receipt['id'], 'points': receipt['points'], 'epoch': receipt['epoch']}), flush=True)
+            print(json.dumps({'event': 'accepted_share', 'id': receipt['id'], 'workWeight': receipt['workWeight'], 'roundWon': receipt.get('roundWon', False), 'epoch': receipt['epoch']}), flush=True)
             self.current = None
             return {'accepted': True, 'receipt': receipt['id']}
         raise ValueError('Unsupported mining method')

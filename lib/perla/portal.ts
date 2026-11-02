@@ -1,3 +1,4 @@
+import { rebuildRoundManifest, type earnedManifest } from './round-math';
 import { createPublicClient, http, isAddress, type Address } from 'viem';
 import type { MiningDatabase } from './database';
 import { CHAIN_ID, JOB_TTL, PROTOCOL, UPSTREAM_COMMIT, currentEpoch, digest, fromBase64 } from './protocol';
@@ -21,7 +22,7 @@ const database = (env: PortalEnv) => env.DB ?? fail(503, 'Contribution storage i
 const integer = (value: string, label: string) => /^\d{1,15}$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : fail(400, `Invalid ${label}.`);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const hash = /^(?:0x)?[a-f0-9]{64}$/i;
-type Manifest = ReturnType<typeof createManifest>;
+type Manifest = ReturnType<typeof createManifest> | ReturnType<typeof earnedManifest>;
 const manifests = new Map<string, Manifest>();
 
 function manifestFor(row: EpochRow): Manifest {
@@ -30,7 +31,7 @@ function manifestFor(row: EpochRow): Manifest {
   if (row.manifest.length > 8 * 1024 * 1024 || !isAddress(row.distributor) || !isAddress(row.token)) fail(503, 'Epoch record could not be validated.');
   const m = JSON.parse(row.manifest) as Manifest;
   if (m.chainId !== CHAIN_ID || m.epoch !== row.epoch || m.root !== row.root || m.budget !== row.budget || m.distributor.toLowerCase() !== row.distributor.toLowerCase() || !Array.isArray(m.allocations) || m.allocations.length > 5000) fail(503, 'Epoch record could not be validated.');
-  const rebuilt = createManifest(row.epoch, BigInt(row.budget), row.distributor, m.allocations.map(a => ({ address: a.address, points: a.points })));
+  const rebuilt = m.version===2?rebuildRoundManifest(m):createManifest(row.epoch, BigInt(row.budget), row.distributor, m.allocations.map(a => ({ address: a.address, points: a.points }))); 
   if (JSON.stringify(rebuilt) !== JSON.stringify(m)) fail(503, 'Epoch allocation integrity check failed.');
   if (manifests.size >= 8) manifests.delete(manifests.keys().next().value!);
   manifests.set(key, m); return m;
@@ -81,7 +82,7 @@ async function mapLimit<T, R>(items: T[], fn: (item: T) => Promise<R>, width = 4
 }
 function epochSummary(row: EpochRow) {
   const m = manifestFor(row);
-  return { epoch: row.epoch, root: row.root, budget: row.budget, distributor: row.distributor, token: row.token, state: row.state, created: row.created, totalPoints: m.totalPoints, recipients: m.allocations.length, fundingTransaction:row.funding_tx??null, fundingBlock:row.funding_block??null, chainId: CHAIN_ID,
+  return { epoch: row.epoch, root: row.root, budget: row.budget, distributor: row.distributor, token: row.token, state: row.state, created: row.created, totalPoints: m.version===2?m.totalWork:m.totalPoints, totalWork:m.version===2?m.totalWork:m.totalPoints, rewardPolicy:m.version===2?m.policy:'legacy-review',wonRounds:m.version===2?m.rounds.length:0, recipients: m.allocations.length, fundingTransaction:row.funding_tx??null, fundingBlock:row.funding_block??null, chainId: CHAIN_ID,
     recordedTokenInfo: row.token.toLowerCase() === recordedDeployment.token.toLowerCase() ? { symbol: recordedDeployment.symbol, decimals: recordedDeployment.decimals } : null };
 }
 async function epochRows(db: MiningDatabase, before?: number, limit = 20) {
@@ -117,7 +118,8 @@ export async function explorerReceipt(env: PortalEnv, id: string) {
   if (!row) fail(404, 'No accepted contribution was found for this receipt.');
   const { header, ...publicFields } = row!;
   const epoch = await database(env).prepare("SELECT * FROM mining_reward_epochs WHERE epoch=? AND state IN ('prepared','active')").bind(row!.epoch).first<EpochRow>();
-  return { ...publicFields, headerHash: header ? await digest(fromBase64(header)) : null, protocol: row!.protocol || 'perla-pearl-plain-v3', upstreamCommit: UPSTREAM_COMMIT, chainId: CHAIN_ID, rewardEpoch: epoch ? epochSummary(epoch) : null, evidence: 'Operator-recorded native verification receipt. Full proof bytes and an EVM verification certificate are not published by this endpoint.' };
+  const round=await database(env).prepare('SELECT r.id,r.state,r.winner_share,r.reward FROM mining_round_shares s JOIN mining_reward_rounds r ON r.id=s.round_id WHERE s.share_id=?').bind(row!.id).first<{id:string;state:string;winner_share:string;reward:string}>();
+  return { ...publicFields, round:round?{id:round.id,state:round.state,winningShare:round.winner_share===row!.id,rewardBaseUnits:round.reward}:null, headerHash: header ? await digest(fromBase64(header)) : null, protocol: row!.protocol || 'perla-pearl-plain-v3', upstreamCommit: UPSTREAM_COMMIT, chainId: CHAIN_ID, rewardEpoch: epoch ? epochSummary(epoch) : null, evidence: 'Operator-recorded native verification receipt. Full proof bytes and an EVM verification certificate are not published by this endpoint.' };
 }
 export async function portalOverview(env: PortalEnv) {
   const db = database(env); const now = Math.floor(Date.now() / 1000); const today = currentEpoch(now);
@@ -135,7 +137,7 @@ export async function accountRewards(env: PortalEnv, address: string, before?: n
   const allocations = rows.flatMap(row => { const allocation = manifestFor(row).allocations.find(a => a.address.toLowerCase() === address.toLowerCase()); return allocation ? [{ row, allocation }] : []; });
   const items = await mapLimit(allocations, async ({ row, allocation }) => {
     const chain = await chainEpoch(env, row);
-    let status: 'pending' | 'funded' | 'claimable' | 'claimed' | 'unavailable' = 'pending';
+    let status: 'pending' | 'funded' | 'claimable' | 'claimed' | 'unavailable' | 'legacy_review' = manifestFor(row).version===1&&row.state!=='active'?'legacy_review':'pending';
     if (chain.verification === 'unavailable' || chain.verification === 'mismatch') status = 'unavailable';
     else if (chain.verification === 'funded') {
       if (row.state !== 'active') status = 'funded';
@@ -149,7 +151,7 @@ export async function accountRewards(env: PortalEnv, address: string, before?: n
         } catch { status = 'unavailable'; }
       }
     }
-    return { ...allocation, ...epochSummary(row), status, verification: chain.verification, tokenInfo: chain.tokenInfo, checkedAt: Math.floor(Date.now() / 1000) };
+    return { ...allocation, workUnits:'workUnits' in allocation?allocation.workUnits:allocation.points, ...epochSummary(row), status, verification: chain.verification, tokenInfo: chain.tokenInfo, checkedAt: Math.floor(Date.now() / 1000) };
   });
   return { address, items, chainId: CHAIN_ID, epochWindow: 20, next: page.length > 20 ? rows[19].epoch : null, checkedAt: Math.floor(Date.now() / 1000) };
 }
@@ -168,11 +170,12 @@ export async function publicPortalResponse(request: Request, env: PortalEnv): Pr
       return json({ items: rows.slice(0, 20).map(epochSummary), next: rows.length > 20 ? rows[19].epoch : null, chainId: CHAIN_ID });
     }
     const epoch = integer(path.split('/')[1], 'epoch');
-    const row = await database(env).prepare("SELECT * FROM mining_reward_epochs WHERE epoch=? AND state IN ('prepared','active')").bind(epoch).first<EpochRow>();
+    const row = await database(env).prepare("SELECT * FROM mining_reward_epochs WHERE epoch=? AND state IN ('prepared','active','cancelled')").bind(epoch).first<EpochRow>();
     if (!row) fail(404, 'This epoch has no published allocation.');
     const m = manifestFor(row!);
     if (path.endsWith('/manifest')) return new Response(JSON.stringify(m, null, 2) + '\n', { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="perla-epoch-${epoch}.json"`, 'Cache-Control': 'no-store' } });
     const chain = await chainEpoch(env, row!);
-    return json({ ...epochSummary(row!), ...chain });
+    const cancellation=row!.state==='cancelled'?await database(env).prepare('SELECT * FROM mining_allocation_cancellations WHERE epoch=?').bind(epoch).first():null;
+    return json({ ...epochSummary(row!), ...chain, cancellation });
   } catch (error) { return error instanceof PortalError ? json({ error: error.message }, error.status) : json({ error: 'The public record could not be read or validated.' }, 503); }
 }

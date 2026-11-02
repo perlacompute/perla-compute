@@ -1,3 +1,6 @@
+import { roundPolicy,requireRounds,activateRounds,openRewardRound,roundInfo,roundForJob,creditRoundShare,RoundError } from './reward-rounds';
+import { ROUND_POLICY } from './round-math';
+import { cancelOwnerValidationAllocation } from './reward-cancellation';
 import { configureRewardPolicy, prepareRewardEpoch, rewardSummary, settlementQueue, RewardScheduleError } from './reward-schedule';
 import { onboardingRequest, trialFor } from './onboarding';
 import type { MiningDatabase } from './database';
@@ -84,8 +87,8 @@ export async function miningSummary(e:MiningEnv){
   const w=await e.DB.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE revoked IS NULL AND last_seen>?').bind(seconds()-90).first<{n:number}>();
   const active=await e.DB.prepare("SELECT COUNT(*) AS n FROM mining_reward_epochs WHERE state='active'").first<{n:number}>();
   const registered=await e.DB.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE revoked IS NULL').first<{n:number}>();
-  const policy=await workPolicy(e);
-  return {storage:true,registeredWorkers:registered?.n??0,activeWorkers:w?.n??0,policy,miningEnabled:policy.miningEnabled,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
+  const policy=await workPolicy(e),rp=await roundPolicy(e);const effective=policy.miningEnabled&&!!rp&&!rp.suspended;
+  return {storage:true,registeredWorkers:registered?.n??0,activeWorkers:w?.n??0,policy:{...policy,miningEnabled:effective},workAdmissionEnabled:policy.miningEnabled,rewardPolicy:{policy:ROUND_POLICY,configured:!!rp,ready:!!rp&&!rp.suspended,policyHash:rp?.policy_hash??null},miningEnabled:effective,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
 }
 export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Response>{
  try{
@@ -97,6 +100,14 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   const portal=await publicPortalResponse(r,e);if(portal)return portal;
   const db=dbFor(e);
   const setup=await onboardingRequest(r,{db,now,path,body:()=>body(r),origin:()=>originCheck(r),account:()=>account(r,db,now),worker:()=>worker(r,db,now),operator:()=>operator(r,e),health:()=>verifierCall(e,'/health'),throttle:(key,max,window)=>throttle(db,key,max,now,window),fail});if(setup)return setup;
+  if(path==='rounds'&&r.method==='GET'){const rows=await db.prepare('SELECT id,epoch,state,difficulty_weight,target_bits,reward,opened,closed,winner_share FROM mining_reward_rounds ORDER BY rowid DESC LIMIT 20').all();return json({items:rows.results,policy:ROUND_POLICY,chainId:CHAIN_ID});}
+  if(path==='operator/reward-rounds/activate'&&r.method==='POST'){
+   await operator(r,e);const health=await verifierCall(e,'/health');if(health.round_target_policy!==ROUND_POLICY)fail(503,'Upgrade the native verifier before activating round rewards.');
+   const old=await db.prepare('SELECT state FROM mining_reward_epochs WHERE epoch=20754').first<{state:string}>();if(old?.state==='prepared')fail(409,'Cancel the authorized owner validation allocation before activating round rewards.');
+   await configureRewardPolicy(e,now);return json(await activateRounds(e,now));
+  }
+  if(path==='operator/reward-rounds/suspend'&&r.method==='POST'){await operator(r,e);await db.prepare('UPDATE mining_round_policy SET suspended=1 WHERE id=1').run();return json({suspended:true,ledgerPreserved:true});}
+  if(path==='operator/epochs/20754/cancel'&&r.method==='POST'){await operator(r,e);return json(await cancelOwnerValidationAllocation(e,now));}
   if(path==='policy'&&r.method==='GET')return json(await workPolicy(e));
   if(path==='operator/health'&&r.method==='GET'){await operator(r,e);let native:unknown;try{native=await verifierCall(e,'/health');}catch{native={ready:false};}return json({operations:await operationSummary(db),policy:await workPolicy(e),native,treasury:await treasurySnapshot(e)});}
   if(path==='operator/policy'&&r.method==='POST'){
@@ -108,7 +119,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await db.prepare('INSERT INTO mining_policy_state(id,profile_id,start_epoch,activated_at,validation_hash,validation_family,validation_version) VALUES(1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET profile_id=excluded.profile_id,start_epoch=excluded.start_epoch,activated_at=excluded.activated_at,validation_hash=excluded.validation_hash,validation_family=excluded.validation_family,validation_version=excluded.validation_version').bind(profile!.id,start,now,await digest(canonical(report)),String(device.computeCapability),'0.5.0').run();
    return json(await workPolicy(e));
   }
-  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND token_hash=? AND revoked IS NULL').bind(now,w.id,w.token_hash).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:await workPolicy(e),trial:await trialFor(db,w.id,now),counts:counts.results,credentialValid:true,ledgerCredit:0});}
+  if(path==='worker/status'&&r.method==='GET'){const w=await worker(r,db,now);await throttle(db,`diagnostics:${w.id}`,12,now);await db.prepare('UPDATE mining_workers SET last_seen=? WHERE id=? AND token_hash=? AND revoked IS NULL').bind(now,w.id,w.token_hash).run();const counts=await db.prepare('SELECT kind,SUM(count) AS count FROM mining_worker_counts WHERE worker_id=? GROUP BY kind').bind(w.id).all();const raw=await workPolicy(e),rp=await roundPolicy(e);return json({id:w.id,address:w.address,name:w.name,protocol:PROTOCOL,policy:{...raw,miningEnabled:raw.miningEnabled&&!!rp&&!rp.suspended},rewardPolicy:ROUND_POLICY,rewardPolicyReady:!!rp&&!rp.suspended,trial:null,counts:counts.results,credentialValid:true,ledgerCredit:0});}
   if(path==='rewards/summary'&&r.method==='GET')return json(await rewardSummary(e,now));
   if(path==='operator/rewards/configure'&&r.method==='POST'){await operator(r,e);return json(await configureRewardPolicy(e,now));}
   if(path==='operator/rewards'&&r.method==='GET'){await operator(r,e);return json(await settlementQueue(e,now));}
@@ -172,47 +183,55 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   }
   if(path==='work'&&r.method==='GET'){
    const w=await worker(r,db,now);await throttle(db,`work:${w.id}`,120,now);
-   if(r.headers.get('x-perla-protocol')!==PROTOCOL)fail(426,'Upgrade to worker 0.5.0 for the current work policy.');
-   const policy=await workPolicy(e);const trial=await trialFor(db,w.id,now);if(!policy.miningEnabled&&!trial)fail(503,'Mining admission is paused or its GPU validation policy is not active. Your worker is saved.');
-   if(!policy.miningEnabled&&trial)policy.profile=profileFor('p1');
-   const h=await verifierCall(e,'/health');if(h.ready!==true)fail(503,'The native verifier is not ready.');
-   const version=r.headers.get('x-perla-version');const arch=r.headers.get('x-perla-architecture');
+   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.0 for round rewards.');
+   const policy=await workPolicy(e);if(!policy.miningEnabled)fail(503,'Mining admission is paused. Your worker identity is retained.');
+   await requireRounds(e);const round=await openRewardRound(e,now);
+   if(!await db.prepare('SELECT address FROM mining_round_epoch_recipients WHERE epoch=? AND address=?').bind(round.epoch,w.address).first()&&(await db.prepare('SELECT COUNT(*) n FROM mining_round_epoch_recipients WHERE epoch=?').bind(round.epoch).first<{n:number}>())!.n>=5000)fail(503,'The epoch recipient limit is reached. New reward wallets can request work next UTC epoch.');
+   const h=await verifierCall(e,'/health');if(h.ready!==true||h.round_target_policy!==ROUND_POLICY)fail(503,'The round-target native verifier is not ready.');
+   if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed.');
+   const version=r.headers.get('x-perla-version'),arch=r.headers.get('x-perla-architecture');
    await db.prepare('UPDATE mining_workers SET last_seen=?,miner_version=?,architecture=? WHERE id=? AND token_hash=? AND revoked IS NULL').bind(now,version&&/^[0-9.a-z-]{1,24}$/.test(version)?version:null,arch&&/^(86|89|90|120)$/.test(arch)?arch:null,w.id,w.token_hash).run();
-   let job=await db.prepare("SELECT j.* FROM mining_jobs j LEFT JOIN mining_shares s ON s.job_id=j.id WHERE j.worker_id=? AND j.expires>? AND j.protocol='perla-pearl-plain-v4' AND s.id IS NULL ORDER BY j.created DESC LIMIT 1").bind(w.id,now).first<{id:string;header:string;expires:number;epoch:number;share_bits:number;work_points:number;policy_hash:string;profile_id:string;created:number}>();
-   if(!job){const id=crypto.randomUUID();const epoch=currentEpoch(now);const header=await makeJobHeader(url.origin,w.id,w.address,epoch,id,now,policy.profile.bits);await db.prepare('INSERT INTO mining_jobs (id,worker_id,epoch,header,created,expires,protocol,share_bits,work_points,policy_hash,profile_id) SELECT ?,id,?,?,?,?,?,?,?,?,? FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(id,epoch,header,now,now+JOB_TTL,PROTOCOL,policy.profile.bits,policy.profile.points,policy.hash,policy.profile.id,w.id,w.token_hash).run();if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed. Use the new machine credential.');job={id,header,expires:now+JOB_TTL,epoch,created:now,share_bits:policy.profile.bits,work_points:policy.profile.points,policy_hash:policy.hash,profile_id:policy.profile.id};}
-   if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed. Use the current machine credential.');
-   return json({id:job.id,epoch:job.epoch,expires:job.expires,protocol:PROTOCOL,chainId:CHAIN_ID,recipient:w.address,workerId:w.id,created:job.created,workPolicy:{hash:job.policy_hash,profile:job.profile_id,points:job.work_points,bits:job.share_bits},mining_job:{incomplete_header_bytes:job.header,target:compactTarget(job.share_bits).toString(),cert_version:CERT_VERSION}});
+   let job=await db.prepare('SELECT j.* FROM mining_jobs j JOIN mining_round_jobs q ON q.job_id=j.id LEFT JOIN mining_shares s ON s.job_id=j.id WHERE j.worker_id=? AND j.expires>? AND q.round_id=? AND s.id IS NULL ORDER BY j.created DESC LIMIT 1').bind(w.id,now,round.id).first<{id:string;header:string;expires:number;epoch:number;created:number;policy_hash:string;profile_id:string;work_points:number;share_bits:number}>();
+   if(!job){
+    const id=crypto.randomUUID(),epoch=currentEpoch(now),expires=Math.min(now+JOB_TTL,(epoch+1)*86400),header=await makeJobHeader(url.origin,w.id,w.address,epoch,id,now,policy.profile.bits,{id:round.id,policyHash:round.policy_hash});
+    const changes=await db.batch([
+     db.prepare("INSERT INTO mining_jobs(id,worker_id,epoch,header,created,expires,protocol,share_bits,work_points,policy_hash,profile_id) SELECT ?,w.id,?,?,?,?,?,?,?,?,? FROM mining_workers w WHERE w.id=? AND w.token_hash=? AND w.revoked IS NULL AND EXISTS(SELECT 1 FROM mining_reward_rounds r JOIN mining_round_policy p ON p.policy_hash=r.policy_hash WHERE r.id=? AND r.state='open' AND p.suspended=0)").bind(id,epoch,header,now,expires,PROTOCOL,policy.profile.bits,policy.profile.points,policy.hash,policy.profile.id,w.id,w.token_hash,round.id),
+     db.prepare('INSERT INTO mining_round_jobs(job_id,round_id) SELECT id,? FROM mining_jobs WHERE id=?').bind(round.id,id),
+    ]);
+    if(changes[0].meta.changes!==1)fail(409,'Round or worker access changed. Request a new challenge.');
+    job={id,epoch,header,created:now,expires,share_bits:policy.profile.bits,work_points:policy.profile.points,policy_hash:policy.hash,profile_id:policy.profile.id};
+   }
+   if(!await db.prepare('SELECT id FROM mining_workers WHERE id=? AND token_hash=? AND revoked IS NULL').bind(w.id,w.token_hash).first())fail(401,'Worker access changed.');
+   return json({id:job.id,epoch:job.epoch,expires:job.expires,protocol:PROTOCOL,chainId:CHAIN_ID,recipient:w.address,workerId:w.id,created:job.created,round:roundInfo(round),workPolicy:{hash:job.policy_hash,profile:job.profile_id,points:job.work_points,bits:job.share_bits},mining_job:{incomplete_header_bytes:job.header,target:compactTarget(job.share_bits).toString(),cert_version:CERT_VERSION}});
   }
   if(path==='shares'&&r.method==='POST'){
    const w=await worker(r,db,now);await throttle(db,`share:${w.id}`,30,now);
-   if(r.headers.get('x-perla-protocol')!==PROTOCOL)fail(426,'Upgrade to worker 0.5.0.');
-   const publicAdmission=(await workPolicy(e)).miningEnabled;if(!publicAdmission&&!await trialFor(db,w.id,now))fail(503,'Mining admission is paused or this worker trial has ended.');
+   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.0.');
+   await requireRounds(e);const admission=(await workPolicy(e)).miningEnabled;if(!admission)fail(503,'Paid round work is paused.');
    const b=await body(r,Math.ceil(MAX_PROOF_BYTES*4/3)+4096);
    if(typeof b.jobId!=='string'||typeof b.plainProof!=='string')fail(400,'A job and native plain proof are required.');
-   const proof=b.plainProof as string;
-   if(proof.length>Math.ceil(MAX_PROOF_BYTES*4/3))fail(413,'Proof too large.');
-   let proofBytes:Uint8Array;try{proofBytes=fromBase64(proof);}catch{fail(400,'Invalid proof encoding.');}
-   if(proofBytes!.length<64||proofBytes!.length>MAX_PROOF_BYTES)fail(400,'Invalid proof size.');
-   const j=await db.prepare('SELECT * FROM mining_jobs WHERE id=? AND worker_id=? AND expires>?').bind(b.jobId,w.id,now).first<{id:string;header:string;epoch:number;expires:number;protocol:string;share_bits:number;work_points:number}>();
-   if(!j){await recordWorker(db,w.id,'stale');fail(409,'Job expired or belongs to another worker.');}
-   if(j!.protocol!==PROTOCOL)fail(426,'Legacy jobs cannot be submitted under the current work policy.');
-   if(await db.prepare('SELECT id FROM mining_shares WHERE job_id=?').bind(j!.id).first()){await recordWorker(db,w.id,'duplicate');fail(409,'This job was already credited.');}
-   const proofHash=await digest(proofBytes!);const headerHash=await digest(fromBase64(j!.header));
-   const result=await verifierCall(e,'/verify',{header:j!.header,plain_proof:b.plainProof,cert_version:CERT_VERSION,protocol:PROTOCOL});
-   if(result.valid!==true){await recordWorker(db,w.id,'rejected');fail(422,'Native proof was rejected. No contribution was credited.');}
-   if(result.proof_hash!==proofHash||result.header_hash!==headerHash)fail(503,'Verifier response binding failed.');
-   // Re-check expiry/revocation/finalization at commit time. The unique job index makes concurrent submissions idempotent.
-   const id=crypto.randomUUID();const accepted=seconds();
-   const inserted=await db.prepare('INSERT OR IGNORE INTO mining_shares (id,job_id,worker_id,address,epoch,proof_hash,accepted,points) SELECT ?,j.id,w.id,w.address,j.epoch,?,?,j.work_points FROM mining_jobs j JOIN mining_workers w ON w.id=j.worker_id WHERE j.id=? AND j.expires>? AND w.revoked IS NULL AND w.token_hash=? AND NOT EXISTS(SELECT 1 FROM mining_reward_epochs e WHERE e.epoch=j.epoch) AND (? OR EXISTS(SELECT 1 FROM mining_worker_trials t WHERE t.worker_id=w.id AND t.expires>? AND (SELECT COUNT(*) FROM mining_shares s WHERE s.worker_id=t.worker_id AND s.accepted>=t.created)<t.max_shares))').bind(id,proofHash,accepted,j!.id,accepted,w.token_hash,publicAdmission?1:0,accepted).run();
-   if(inserted.meta.changes!==1)fail(409,'Job was credited, expired, revoked, or its epoch is closed.');
+   const proof=b.plainProof as string;let bytes:Uint8Array;try{bytes=fromBase64(proof);}catch{fail(400,'Invalid proof encoding.');}
+   if(bytes!.length<64||bytes!.length>MAX_PROOF_BYTES)fail(400,'Invalid proof size.');
+   const j=await db.prepare('SELECT * FROM mining_jobs WHERE id=? AND worker_id=?').bind(b.jobId,w.id).first<{id:string;header:string;epoch:number;protocol:string;work_points:number;expires:number}>();
+   if(!j)fail(409,'Job does not belong to this worker.');
+   if(await db.prepare('SELECT id FROM mining_shares WHERE job_id=?').bind(j!.id).first())fail(409,'This job was already credited.');
+   if(j!.expires<=now||j!.epoch!==currentEpoch(now))return json({error:'Job expired. Request a new challenge.',code:'job_expired',credited:false},409);
+   const round=await roundForJob(e,j!.id);if(!round||round.state!=='open')return json({error:'Reward round closed. Request a new challenge.',code:'round_closed',credited:false},409);
+   const proofHash=await digest(bytes!),headerHash=await digest(fromBase64(j!.header));
+   const result=await verifierCall(e,'/verify',{header:j!.header,plain_proof:proof,cert_version:CERT_VERSION,protocol:PROTOCOL,round_bits:round.target_bits});
+   if(result.valid!==true){await recordWorker(db,w.id,'rejected');fail(422,'Native proof was rejected. No work was credited.');}
+   if(result.proof_hash!==proofHash||result.header_hash!==headerHash||result.round_target_policy!==ROUND_POLICY||result.round_bits!==round.target_bits||typeof result.round_valid!=='boolean')fail(503,'Round verifier response binding failed.');
+   const id=crypto.randomUUID();let receipt;
+   try{receipt=await creditRoundShare(e,{id,jobId:j!.id,workerId:w.id,tokenHash:w.token_hash,proofHash,accepted:seconds(),round,won:result.round_valid===true,admission});}
+   catch(error){if(error instanceof RoundError&&error.status===409&&!await db.prepare('SELECT id FROM mining_shares WHERE job_id=?').bind(j!.id).first()){const latest=await roundForJob(e,j!.id);if(latest&&latest.state!=='open')return json({error:'Reward round closed. Request a new challenge.',code:'round_closed',credited:false},409);if(j!.expires<=seconds()||j!.epoch!==currentEpoch(seconds()))return json({error:'Job expired during verification. Request a new challenge.',code:'job_expired',credited:false},409);}throw error;}
    await recordWorker(db,w.id,'accepted');
-   return json({id,accepted:true,points:j!.work_points,epoch:j!.epoch,proofHash,tokenReward:null},201);
+   return json({id,accepted:true,workWeight:j!.work_points,epoch:j!.epoch,proofHash,roundId:round.id,roundWon:receipt.roundWon,roundReward:receipt.roundWon?round.reward:'0',tokenReward:null},201);
   }
   if(path.match(/^operator\/epochs\/\d+\/funding$/)&&r.method==='POST'){
    await operator(r,e);const epoch=Number(path.split('/')[2]);const b=await body(r);if(typeof b.transaction!=='string'||!/^0x[a-f0-9]{64}$/i.test(b.transaction))fail(400,'A funding transaction hash is required.');
-   const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{epoch:number;distributor:Address;token:Address;root:string;budget:string}>();if(!row)fail(404,'Epoch not found.');
+   const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{epoch:number;distributor:Address;token:Address;root:string;budget:string;state:string}>();if(row?.state==='cancelled')fail(409,'Cancelled allocation cannot be funded.');if(!row)fail(404,'Epoch not found.');
    let trace;try{trace=await verifyFunding(e,row!,b.transaction as `0x${string}`);}catch{fail(409,'The canonical funding transaction, event and contract must match this manifest.');}
-   await db.prepare('UPDATE mining_reward_epochs SET funding_tx=?,funding_block=?,funding_block_hash=? WHERE epoch=?').bind(trace!.transaction,trace!.block,trace!.blockHash,epoch).run();return json(trace);
+   const updated=await db.prepare('UPDATE mining_reward_epochs SET funding_tx=?,funding_block=?,funding_block_hash=? WHERE epoch=? AND state<>\'cancelled\'').bind(trace!.transaction,trace!.block,trace!.blockHash,epoch).run();if(updated.meta.changes!==1)fail(409,'Allocation was cancelled while recording funding.');return json(trace);
   }
   if(path==='operator/epochs'&&r.method==='POST'){
    await operator(r,e);const b=await body(r);return json(await prepareRewardEpoch(e,Number(b.epoch),now,b.budget));
@@ -221,11 +240,11 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
    await operator(r,e);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(Number(path.split('/').at(-1))).first();return row?json(row):json({error:'Epoch not found.'},404);
   }
   if(path.match(/^operator\/epochs\/\d+\/activate$/)&&r.method==='POST'){
-   await operator(r,e);const epoch=Number(path.split('/')[2]);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{epoch:number;root:`0x${string}`;budget:string;distributor:Address;token:Address;funding_tx:`0x${string}`|null}>();if(!row)fail(404,'Epoch not found.');
+   await operator(r,e);const epoch=Number(path.split('/')[2]);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first<{epoch:number;root:`0x${string}`;budget:string;distributor:Address;token:Address;funding_tx:`0x${string}`|null;state:string}>();if(row?.state==='cancelled')fail(409,'Cancelled allocation cannot be activated.');if(!row)fail(404,'Epoch not found.');
    if(!row!.funding_tx)fail(409,'Record the canonical funding transaction before activation.');
    try{await verifyFunding(e,row!,row!.funding_tx!);}catch{fail(409,'The recorded funding transaction is not canonical or does not match.');}
-   await db.prepare("UPDATE mining_reward_epochs SET state='active' WHERE epoch=?").bind(epoch).run();return json({epoch,state:'active'});
+   const activated=await db.prepare("UPDATE mining_reward_epochs SET state='active' WHERE epoch=? AND state<>'cancelled'").bind(epoch).run();if(activated.meta.changes!==1)fail(409,'Allocation was cancelled while activating.');return json({epoch,state:'active'});
   }
   return json({error:'Endpoint not found.'},404);
- }catch(error){if(error instanceof HttpError||error instanceof RewardScheduleError)return json({error:error.message},error.status,error.status===503||error.status===429?{'Retry-After':'10'}:{});return json({error:'Mining service could not complete this request. No unverified work was credited.'},503);}
+ }catch(error){if(error instanceof HttpError||error instanceof RewardScheduleError||error instanceof RoundError)return json({error:error.message},error.status,error.status===503||error.status===429?{'Retry-After':'10'}:{});return json({error:'Mining service could not complete this request. No unverified work was credited.'},503);}
 }

@@ -17,7 +17,18 @@ export function createManifest(epoch:number, budget:bigint, distributor:Address,
   const layers:Hex[][]=[items.map(r=>rewardLeaf(distributor,epoch,r.index,r.address,BigInt(r.amount)))];
   while(layers.at(-1)!.length>1){const row=layers.at(-1)!;const next:Hex[]=[];for(let i=0;i<row.length;i+=2)next.push(pair(row[i],row[i+1]??row[i]));layers.push(next);}
   items.forEach((r,i)=>{let p=i;for(const layer of layers.slice(0,-1)){r.proof.push(layer[p^1]??layer[p]);p=Math.floor(p/2);}});
-  return {version:1,chainId:CHAIN_ID,epoch,budget:budget.toString(),distributor,root:layers.at(-1)![0],totalPoints:total.toString(),allocations:items};
+  return {version:1 as const,chainId:CHAIN_ID,epoch,budget:budget.toString(),distributor,root:layers.at(-1)![0],totalPoints:total.toString(),allocations:items};
+}
+export function createAmountManifest(epoch:number, distributor:Address, rows:{address:Address;workUnits:number;amount:string}[]) {
+  if(!Number.isSafeInteger(epoch)||epoch<0||!rows.length||rows.length>5000)throw Error('Invalid earned allocation');
+  const ordered=[...rows].sort((a,b)=>a.address.toLowerCase().localeCompare(b.address.toLowerCase()));
+  if(new Set(ordered.map(r=>r.address.toLowerCase())).size!==ordered.length||ordered.some(r=>!Number.isSafeInteger(r.workUnits)||r.workUnits<=0||!/^\d+$/.test(r.amount)))throw Error('Invalid earned allocation rows');
+  const budget=ordered.reduce((sum,r)=>sum+BigInt(r.amount),0n);if(budget<=0n||budget>=2n**256n)throw Error('Invalid earned budget');
+  const items=ordered.map((r,index)=>({...r,index,proof:[] as Hex[]}));
+  const layers:Hex[][]=[items.map(r=>rewardLeaf(distributor,epoch,r.index,r.address,BigInt(r.amount)))];
+  while(layers.at(-1)!.length>1){const row=layers.at(-1)!,next:Hex[]=[];for(let i=0;i<row.length;i+=2)next.push(pair(row[i],row[i+1]??row[i]));layers.push(next);}
+  items.forEach((r,i)=>{let p=i;for(const layer of layers.slice(0,-1)){r.proof.push(layer[p^1]??layer[p]);p=Math.floor(p/2);}});
+  return {version:2 as const,chainId:CHAIN_ID,epoch,budget:budget.toString(),distributor,root:layers.at(-1)![0],totalWork:ordered.reduce((sum,r)=>sum+BigInt(r.workUnits),0n).toString(),allocations:items};
 }
 export const rewardsAbi = [
  {type:'function',name:'rewardToken',stateMutability:'view',inputs:[],outputs:[{type:'address'}]},

@@ -6,7 +6,7 @@ GPU mining infrastructure for verifiable compute on Robinhood Chain. Perla conne
 
 ## Current state
 
-This repository contains the **0.5.0 testnet source**. Mainnet remains on hold.
+This repository contains the **0.5.0 application with worker 0.9.0 and round-reward source**. Mainnet remains on hold.
 
 | Component | State and scope |
 | --- | --- |
@@ -14,8 +14,8 @@ This repository contains the **0.5.0 testnet source**. Mainnet remains on hold.
 | Testnet token | PERL, fixed 1,000,000,000 supply, 18 decimals |
 | Contracts | New PERL token and matching distributor reported deployed on 27 October 2026 |
 | Website integration | Prepared connector available; completion requires the VPS connection report |
-| Mining admission | Paused at the latest supplied operator checkpoint |
-| Physical GPU validation | Still requires real hardware self-tests and accepted coordinator receipts |
+| Mining admission | Operator controlled; read the live status endpoint |
+| Physical GPU validation | RTX 4090 validation and accepted legacy work reported by the operator; new round targets still need deployment validation |
 | Public reward activation | No completed funded mining epoch or live claim reported in this release record |
 | Mainnet | On hold; published 70M migration / 130M mining plan, 100:7 ratio and 1M global daily migration output cap; no active bridge or funded mainnet reserve |
 
@@ -28,10 +28,13 @@ These are source and dated operator records. Check the live status page and curr
 1. A wallet signs in and creates a scoped, revocable worker credential.
 2. The coordinator assigns a short-lived challenge bound to the worker, recipient and network.
 3. A worker submits its native proof. Accepted work receives a contribution record; duplicate credit is rejected.
-4. After a UTC epoch closes, the operator publishes a deterministic allocation, funds its Merkle root with existing tokens, and separately activates the matching epoch.
-5. A valid claim pays the recipient committed in that funded allocation.
+4. The same proof is checked against a harder round target. A qualifying winner unlocks one reward, split through the recent weighted PPLNS share window. Ordinary shares alone unlock no PERL.
+5. After a UTC epoch closes, the operator publishes a deterministic allocation, funds its Merkle root with existing tokens, and separately activates the matching epoch.
+6. A valid claim pays the recipient committed in that funded allocation.
 
 Perla uses Robinhood for settlement. Proof submission does not mint new ERC-20 tokens. The reward contract enforces its funded allocation; the operator controls native verification, the offchain ledger and root publication. Read [the architecture and trust model](ARCHITECTURE.md).
+
+Read [the complete round-reward rules and cutover](docs/REWARD-ROUNDS.md). The daily curve is a cap, each won round unlocks floor(cap / 446), and unused capacity has no rollover.
 
 ## Software included
 

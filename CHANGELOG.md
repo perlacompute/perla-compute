@@ -1,3 +1,9 @@
+# Reward rounds / worker 0.9.0
+
+- Separate ordinary shares from harder qualifying round proofs, with atomic PPLNS snapshots and bounded daily earned rewards.
+- Preserve funded legacy claims; hold unfunded legacy allocations and audit cancellation of the owner validation allocation.
+- Update Reward Center, docs and native worker/verifier integration. No mainnet deployment or epoch funding.
+
 # Worker 0.7.0 — Wallet and rig-name setup
 
 - Added public reward-address and worker-name connection with private local credentials; browser login remains for dashboard management and claims.

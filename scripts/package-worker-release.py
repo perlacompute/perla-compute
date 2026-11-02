@@ -3,7 +3,7 @@
 import argparse,gzip,hashlib,io,json,tarfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
-RTX=['Dockerfile','.dockerignore','build-cuda.sh','setup-worker.sh','rtx.cu','protocol.py','cuda_backend.py','reference.py','miner.py','test_protocol.py','doctor.py','perla','work-profiles.json','README.md','NOTICE.md']
+RTX=['Dockerfile','.dockerignore','build-cuda.sh','setup-worker.sh','rtx.cu','protocol.py','cuda_backend.py','reference.py','miner.py','test_protocol.py','doctor.py','perla','work-profiles.json','round-rules.json','README.md','NOTICE.md']
 HOPPER=['perla_bridge.py','verifier.py','worker-entrypoint.sh','setup-worker.sh','Dockerfile.worker','Dockerfile.verifier','NOTICE.md']
 def package(output,tag):
  manifest=json.loads((ROOT/'services/worker-release.json').read_text())

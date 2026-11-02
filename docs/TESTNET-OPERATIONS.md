@@ -1,3 +1,7 @@
+# Round rewards update
+
+Worker-v0.9.0 is required for round work. See [the complete round rules](https://github.com/perlacompute/perla-compute/blob/main/docs/REWARD-ROUNDS.md). Shares alone unlock no tokens; UTC budgets are caps. Earlier daily full-budget examples below are historical and superseded.
+
 # Perla 0.5.0 testnet operations
 
 Mainnet is on hold. This release supports Robinhood Testnet 46630 only. The active testnet token is PERL with a fixed 1B supply and a new matching distributor. Mainnet is a separate planned deployment; testnet balances do not establish a conversion right. See PERL-TESTNET.md for current addresses and the migration guard.

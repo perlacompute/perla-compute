@@ -21,12 +21,12 @@ def main():
         if 'report' not in locals(): raise RuntimeError('The reward review was unavailable.')
         print('Robinhood Testnet 46630 — PERL reward settlement',flush=True)
         for row in report['epochs']:
-            print(f"Epoch {row['epoch']}: {row['budgetPERL']} PERL | {row['recipients']} recipients | {row['points']} points\nRoot: {row['root']}",flush=True)
-        print('Total scheduled budget: '+report['totalScheduledPERL']+' testnet PERL. Mainnet stays closed.',flush=True)
+            print(f"Epoch {row['epoch']}: {row['budgetPERL']} PERL | {row['recipients']} recipients | {row['wonRounds']} won rounds | {row['workUnits']} weighted work units\nRoot: {row['root']}",flush=True)
+        print('Total earned round budget: '+report['totalScheduledPERL']+' testnet PERL. Mainnet stays closed.',flush=True)
         if not report['epochs']:
             from datetime import datetime,timezone
             at=datetime.fromtimestamp(report['settlementOpensAt'],timezone.utc)
-            print('No closed, unsettled epoch contains accepted work. Current epoch can settle from '+at.isoformat()+'. No wallet key or transaction is needed.',flush=True);return
+            print('No closed epoch contains an unsettled qualifying reward round. Current epoch can settle from '+at.isoformat()+'. No wallet key or transaction is needed.',flush=True);return
         if action!='settle':
             print('Manifests prepared. Funding requires: bash scripts/perla-rewards.sh settle',flush=True);return
         if report.get('rpcReady') is not True: raise RuntimeError('The configured testnet RPC did not confirm the reviewed token/distributor. No key was requested. Restore RPC access or use a Robinhood Testnet provider in PERLA_RPC_URL, then recreate web and rerun settlement.')

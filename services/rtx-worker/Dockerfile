@@ -28,7 +28,7 @@ COPY --from=native /opt/pearl/LICENSE /licenses/Pearl-ISC.txt
 COPY --from=native /opt/pearl/plonky2/LICENSE-MIT /licenses/Plonky2-MIT.txt
 COPY --from=native /opt/pearl/plonky2/LICENSE-APACHE /licenses/Plonky2-APACHE.txt
 COPY --from=cuda /build/NVIDIA-CONTAINER-LICENSE.txt /licenses/NVIDIA-CONTAINER-LICENSE.txt
-COPY protocol.py cuda_backend.py reference.py miner.py test_protocol.py perla_bridge.py work-profiles.json NOTICE.md ./
+COPY protocol.py cuda_backend.py reference.py miner.py test_protocol.py perla_bridge.py work-profiles.json round-rules.json NOTICE.md ./
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 RAYON_NUM_THREADS=2
 USER 65534:65534
 ENTRYPOINT ["python", "/app/miner.py"]

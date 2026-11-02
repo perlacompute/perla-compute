@@ -23,11 +23,12 @@ UPSTREAM = '82e6eee7076aafe10123e08db78f100d270c0582'
 PROTOCOL = 'perla-pearl-plain-v4'
 RELEASE = 'worker-v0.5.0'  # Pinned GPU/proof core and compatible native build cache.
 SUPPORTED_INSTALL_RELEASES = (RELEASE, 'worker-v0.6.0', 'worker-v0.7.0',
-                              'worker-v0.8.0', 'worker-v0.8.1', 'worker-v0.8.2')
+                              'worker-v0.8.0', 'worker-v0.8.1', 'worker-v0.8.2', 'worker-v0.9.0')
 RUST = '1.99.1'
 VERSION = '0.1.0'
 # Only the reviewed 0.8.1 Python mining loop can be replaced in-place.
 # CUDA, native proof bindings and every other inventory entry must match.
+ALLOWED_PREVIOUS_SOURCES = {'miner.py': 'fddd02e15d254e99d34beb47f59bbe82312c6ad87934e6d3fd14f46ada229ea6', 'protocol.py': '26fe732fc9d69dc927eb2fafcad46f98472131db1b7629a170aa8b4958959997', 'perla_bridge.py': '8da481951524d1cad7d8d3fc3edaae4dc3f2943e0b8cced18803f6a03ca65b92', 'test_protocol.py': '99a8e06c174199982dceeb51ac17b066c7f1a18c1b4e5d729e4c5676bc278f07'}
 COMPATIBLE_MINER_HASH = 'b44d6ca03aa6b0e7e3b7c37f98cc0b26f957dd313ea599c5ba964d0782ff9778'
 
 
@@ -192,8 +193,9 @@ def read_build(native_root):
 
 
 def refresh_compatible_build(native_root, source, tools):
-    """Reuse compiled artifacts only for the explicitly reviewed loop update."""
+    """Refresh only reviewed Python/rules changes; retain the exact compiled ABI."""
     root = clean_path(native_root)
+    allowed = ALLOWED_PREVIOUS_SOURCES
     try:
         state = json.loads(regular(root / 'current.json', 1024 * 1024))
         folder = clean_path(Path(state.get('directory', '')))
@@ -202,33 +204,38 @@ def refresh_compatible_build(native_root, source, tools):
                 or state.get('arch') != tools['gpu']['arch'] or state.get('nvccVersion') != tools['nvccVersion']
                 or not (folder / 'venv/bin/python').is_file()):
             return False
-        expected = inventory()
-        if sha(regular(folder / 'worker/miner.py')) != COMPATIBLE_MINER_HASH:
-            return False
-        for name, digest in expected.items():
-            if name != 'miner.py' and sha(regular(folder / 'worker' / name)) != digest:
+        replacements = []
+        for name, expected in inventory().items():
+            path = folder / 'worker' / name
+            actual = sha(regular(path)) if path.exists() else None
+            if actual == expected:
+                continue
+            permitted = {allowed.get(name)}
+            if name == 'miner.py':
+                permitted.add(COMPATIBLE_MINER_HASH)
+            if name != 'round-rules.json' and (actual is None or actual not in permitted):
                 return False
-        if sha(regular(folder / 'worker/libperla_rtx.so')) != state.get('cudaSha256'):
+            if name == 'round-rules.json' and actual is not None:
+                return False
+            data = regular(source / name)
+            if sha(data) != expected:
+                return False
+            replacements.append((path, data))
+        if not replacements or sha(regular(folder / 'worker/libperla_rtx.so')) != state.get('cudaSha256'):
             return False
-        data = regular(source / 'miner.py')
-        if sha(data) != expected['miner.py']:
-            raise NativeError('Reviewed mining loop checksum differs.')
     except (OSError, ValueError, KeyError, NativeError):
         return False
-    destination = folder / 'worker/miner.py'
-    fd, name = tempfile.mkstemp(prefix='miner-reviewed-', dir=destination.parent)
-    try:
-        with os.fdopen(fd, 'wb') as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(name, 0o644)
-        os.replace(name, destination)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+    # The native lock prevents execution during this resumable per-file refresh.
+    for destination, data in replacements:
+        fd, name = tempfile.mkstemp(prefix='source-reviewed-', dir=destination.parent)
+        try:
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(data); stream.flush(); os.fsync(stream.fileno())
+            os.chmod(name, 0o644); os.replace(name, destination)
+        finally:
+            if os.path.exists(name): os.unlink(name)
     read_build(native_root)
-    print('Updated the reviewed mining loop; verified CUDA and proof build retained.', flush=True)
+    print('Updated reviewed round-worker source; verified CUDA and native proof build retained.', flush=True)
     return True
 
 

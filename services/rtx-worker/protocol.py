@@ -27,6 +27,8 @@ TILES = [(r, c) for r in ROW_OFFSETS for c in COL_OFFSETS]
 MAX_U256 = (1 << 256) - 1
 SHARE_BITS = 0x1d00ffff
 POLICY = json.loads(Path(__file__).with_name("work-profiles.json").read_text())
+ROUND_RULES = json.loads(Path(__file__).with_name("round-rules.json").read_text())
+ROUND_HASH = hashlib.sha256(json.dumps(ROUND_RULES, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 PROFILES = {p["bits"]: p for p in POLICY["profiles"]}
 SALT_A = blake3(b"pearl/cert-v3/noise-seed/A").digest()
 SALT_B = blake3(b"pearl/cert-v3/noise-seed/B").digest()
@@ -79,11 +81,22 @@ def validate_job(job, now, origin=None):
     profile = PROFILES[bits]
     if policy.get("bits") != bits or policy.get("profile") != profile["id"] or policy.get("points") != profile["points"]:
         raise ValueError("Job scoring does not match its server-assigned target")
+    round_info = job.get("round")
+    if not isinstance(round_info, dict) or round_info.get("policy") != ROUND_RULES["policy"] or round_info.get("policyHash") != ROUND_HASH:
+        raise ValueError("Missing or mismatched round reward policy; upgrade the coordinator")
+    if str(uuid.UUID(round_info.get("id", ""))) != round_info["id"]:
+        raise ValueError("Invalid reward round identifier")
+    targets = {r["workUnits"]: r["bits"] for r in ROUND_RULES["targets"]}
+    units = round_info.get("workUnits")
+    if type(units) is not int or targets.get(units) != round_info.get("bits") or round_info.get("windowWorkUnits") != units * ROUND_RULES["windowMultiplier"] or round_info.get("epoch") != job.get("epoch"):
+        raise ValueError("Invalid round target or PPLNS window")
+    if not isinstance(round_info.get("rewardBaseUnits"), str) or not round_info["rewardBaseUnits"].isdigit() or not 0 < int(round_info["rewardBaseUnits"]) < 10**27:
+        raise ValueError("Invalid round reward metadata")
     if origin:
         recipient, worker, epoch = job.get("recipient"), job.get("workerId"), job.get("epoch")
         if not isinstance(recipient, str) or not isinstance(worker, str) or type(epoch) is not int or epoch != timestamp // 86400:
             raise ValueError("Missing work recipient or UTC epoch binding")
-        previous = hashlib.sha256(f"perla-work-v4|46630|{origin}|{epoch}".encode()).digest()[::-1]
+        previous = hashlib.sha256(f"perla-work-v4|46630|{origin}|{epoch}|round={round_info['id']}|policy={ROUND_HASH}".encode()).digest()[::-1]
         commitment = hashlib.sha256(f"perla-recipient-v4|46630|{worker}|{recipient}|{epoch}|{job['id']}".encode()).digest()[::-1]
         if header[4:36] != previous or header[36:68] != commitment:
             raise ValueError("Work domain or recipient commitment does not match")

@@ -28,11 +28,12 @@ NOW = 1792972800
 def job():
     ident,worker=str(uuid.uuid4()),str(uuid.uuid4())
     epoch=NOW//86400;recipient='0x'+'11'*20;origin='https://perla.invalid'
-    previous=hashlib.sha256(f'perla-work-v4|46630|{origin}|{epoch}'.encode()).digest()[::-1]
+    round_id=str(uuid.uuid4());round_info={'id':round_id,'epoch':epoch,'policy':p.ROUND_RULES['policy'],'policyHash':p.ROUND_HASH,'bits':0x1c00ffff,'workUnits':256,'windowWorkUnits':512,'rewardBaseUnits':'1000000000000000000'}
+    previous=hashlib.sha256(f'perla-work-v4|46630|{origin}|{epoch}|round={round_id}|policy={p.ROUND_HASH}'.encode()).digest()[::-1]
     commitment=hashlib.sha256(f'perla-recipient-v4|46630|{worker}|{recipient}|{epoch}|{ident}'.encode()).digest()[::-1]
     h=struct.pack('<I',1)+previous+commitment+struct.pack('<II',NOW,p.SHARE_BITS)
     return {"id":ident,"workerId":worker,"recipient":recipient,"epoch":epoch,"chainId":46630,"protocol":p.PROTOCOL,
-        "expires":NOW+300,"workPolicy":{"profile":"p1","points":1,"bits":p.SHARE_BITS},
+        "expires":NOW+300,"round":round_info,"workPolicy":{"profile":"p1","points":1,"bits":p.SHARE_BITS},
         "mining_job":{"incomplete_header_bytes":base64.b64encode(h).decode(),"target":str(0xffff<<208),"cert_version":3}}
 
 
@@ -54,7 +55,7 @@ class Client:
         self.calls.append((path, payload))
         if path == "work": return job()
         if path == "shares":
-            return {"id": str(uuid.uuid4()), "accepted": True, "points": 1, "epoch": NOW // 86400}
+            return {"id": str(uuid.uuid4()), "accepted": True, "workWeight": 1, "epoch": NOW // 86400}
         raise AssertionError("Unexpected endpoint")
 
 

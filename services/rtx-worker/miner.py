@@ -25,7 +25,7 @@ from reference import compute as reference_compute, selected_transcript
 # Source tree and the downloadable archive share the same bridge implementation.
 if not Path(__file__).with_name("perla_bridge.py").is_file():
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pearl-adapter"))
-from perla_bridge import PerlaClient
+from perla_bridge import PerlaClient, CoordinatorError
 
 VERSION = "0.5.0"
 STOP = False
@@ -126,7 +126,21 @@ def run_worker(args, client_factory=PerlaClient, backend_factory=CudaBackend):
         job, last_poll = None, 0.0
         while (args.shares == 0 or accepted < args.shares) and not STOP:
             if job is None or time.time() >= job["expires"] - 5 or time.monotonic() - last_poll >= 15:
-                refreshed = client.call("work")
+                # GET is safe to repeat: the coordinator reuses a pending job.
+                # Submission POSTs below retain the strict no-ambiguous-retry rule.
+                try:
+                    refreshed = client.call("work")
+                except (CoordinatorError, OSError) as error:
+                    status = getattr(error, "status", None)
+                    if isinstance(error, CoordinatorError) and status not in (409, 429, 500, 502, 503, 504):
+                        raise
+                    delay = 30 if status == 429 else 10
+                    emit("waiting_for_work", status=status, retrySeconds=delay, submitted=False)
+                    job = None
+                    deadline = time.monotonic() + delay
+                    while not STOP and time.monotonic() < deadline:
+                        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+                    continue
                 header = validate_job(refreshed, time.time(), client.endpoint)
                 if job is None or refreshed["id"] != job["id"]:
                     emit("job_assigned", job=refreshed["id"], epoch=refreshed.get("epoch"),
@@ -152,11 +166,18 @@ def run_worker(args, client_factory=PerlaClient, backend_factory=CudaBackend):
                 continue
             # An ambiguous POST is never retried automatically. It may already
             # have committed; inspect the ledger using its job ID before retrying.
-            receipt = client.call("shares", {"jobId": job["id"], "plainProof": proof.to_base64()})
-            if not isinstance(receipt, dict) or receipt.get("accepted") is not True or receipt.get("points") != job["workPolicy"]["points"] or not isinstance(receipt.get("id"), str):
+            try:
+                receipt = client.call("shares", {"jobId": job["id"], "plainProof": proof.to_base64()})
+            except CoordinatorError as error:
+                if error.status == 409 and error.code in ("round_closed", "job_expired") and error.credited is False:
+                    emit("round_changed", job=job["id"], resubmitted=False)
+                    job = None
+                    continue
+                raise
+            if not isinstance(receipt, dict) or receipt.get("accepted") is not True or receipt.get("workWeight") != job["workPolicy"]["points"] or not isinstance(receipt.get("id"), str):
                 raise RuntimeError("Coordinator did not return a matching receipt; inspect the account before retrying")
             accepted += 1
-            emit("accepted_share", id=receipt["id"], job=job["id"], epoch=receipt.get("epoch"), points=receipt["points"],
+            emit("accepted_share", id=receipt["id"], job=job["id"], epoch=receipt.get("epoch"), workWeight=receipt["workWeight"], roundId=receipt.get("roundId"), roundWon=receipt.get("roundWon", False), roundReward=receipt.get("roundReward", "0"),
                 gpuComputeMs=round(ms, 3), attempts=attempts,
                 explorer=client.endpoint + "/explorer/" + receipt["id"])
             job = None

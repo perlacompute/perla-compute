@@ -19,6 +19,10 @@ def load(name, path):
     return module
 
 
+class TransportRejection(ValueError):
+    def __init__(self, credited=False, status=409, code="round_closed"):
+        super().__init__('round closed');self.status=status;self.code=code;self.credited=credited
+
 def load_loop():
     # CI need not install native bindings or emulate an NVIDIA device.
     protocol = types.ModuleType('protocol')
@@ -28,7 +32,7 @@ def load_loop():
     stubs = {'numpy': types.SimpleNamespace(isfinite=math.isfinite), 'protocol': protocol,
              'cuda_backend': types.SimpleNamespace(CudaBackend=object),
              'reference': types.SimpleNamespace(compute=object, selected_transcript=object),
-             'perla_bridge': types.SimpleNamespace(PerlaClient=object)}
+             'perla_bridge': types.SimpleNamespace(PerlaClient=object, CoordinatorError=TransportRejection)}
     with patch.dict(sys.modules, stubs):
         return load('perla_continuous_loop', ROOT / 'services/rtx-worker/miner.py')
 
@@ -46,7 +50,7 @@ class ContinuousTests(unittest.TestCase):
         self.m = load_loop()
         self.calls, self.events, self.clock = [], [], 0.0
 
-    def run_loop(self, shares=0, stop_after=3, lost=False, stop_during_wait=False):
+    def run_loop(self, shares=0, stop_after=3, lost=False, stop_during_wait=False, stale=False, wait_work=False):
         module = self.m
         outer = self
         class Client:
@@ -54,13 +58,15 @@ class ContinuousTests(unittest.TestCase):
             def call(self, path, payload=None):
                 outer.calls.append(path)
                 if path == 'work':
+                    if wait_work and outer.calls.count('work')==1:raise TransportRejection(status=503)
                     return {'id': 'job-' + str(len(outer.calls)), 'expires': 1300,
                             'epoch': 1, 'workPolicy': {'points': 1}}
                 count = outer.calls.count('shares')
                 if lost: raise OSError('Submission response lost')
+                if stale and count==1:raise TransportRejection(code="job_expired" if stale=="expired" else "round_closed")
                 if stop_after is not None and count >= stop_after:
                     module.STOP = True
-                return {'accepted': True, 'id': 'receipt-' + str(count), 'points': 1, 'epoch': 1}
+                return {'accepted': True, 'id': 'receipt-' + str(count), 'workWeight': 1, 'epoch': 1}
         def sleep(seconds):
             self.clock += seconds
             if stop_during_wait: module.STOP = True
@@ -102,6 +108,21 @@ class ContinuousTests(unittest.TestCase):
     def test_ambiguous_post_is_not_retried_even_in_continuous_mode(self):
         with self.assertRaisesRegex(OSError, 'response lost'): self.run_loop(lost=True)
         self.assertEqual(self.calls, ['work', 'shares'])
+
+    def test_explicit_closed_round_rejection_discards_the_job_and_fetches_fresh_work(self):
+        self.assertEqual(self.run_loop(stop_after=2,stale=True),1)
+        self.assertEqual(self.calls,['work','shares','work','shares'])
+        self.assertEqual(len([e for e,_ in self.events if e=='round_changed']),1)
+
+    def test_paused_or_unavailable_work_waits_then_continues_without_a_submission_retry(self):
+        self.assertEqual(self.run_loop(shares=1,stop_after=None,wait_work=True),1)
+        self.assertEqual(self.calls,['work','work','shares'])
+        self.assertGreaterEqual(self.clock,10)
+        self.assertEqual(len([e for e,_ in self.events if e=='waiting_for_work']),1)
+
+    def test_explicit_expired_job_rejection_fetches_new_work_without_replaying_a_proof(self):
+        self.assertEqual(self.run_loop(stop_after=2,stale="expired"),1)
+        self.assertEqual(self.calls,["work","shares","work","shares"])
 
     def test_job_assignment_does_not_claim_token_rewards(self):
         self.run_loop(shares=1, stop_after=None)

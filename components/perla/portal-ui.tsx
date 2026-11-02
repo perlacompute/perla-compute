@@ -19,7 +19,7 @@ export function RecordField({ label, value, href }: { label: string; value: stri
   return <div className="record-field"><dt>{label}</dt><dd>{href ? <Link className="mono portal-value" href={href}>{value}<ArrowUpRight size={13}/></Link> : <span className="mono portal-value">{value}</span>}<CopyButton value={value} label="Copy"/></dd></div>;
 }
 export function StatePill({ state }: { state: string }) {
-  const labels: Record<string, string> = { prepared: 'Prepared', active: 'Activated', pending: 'Awaiting funding', funded: 'Awaiting activation', claimable: 'Claimable', claimed: 'Claimed', unavailable: 'Check unavailable', mismatch: 'Contract mismatch', unfunded: 'Not funded' };
+  const labels: Record<string, string> = { cancelled: 'Cancelled · audit retained', legacy_review: 'Legacy · held for review', prepared: 'Prepared', active: 'Activated', pending: 'Awaiting funding', funded: 'Awaiting activation', claimable: 'Claimable', claimed: 'Claimed', unavailable: 'Check unavailable', mismatch: 'Contract mismatch', unfunded: 'Not funded' };
   return <Pill tone={['claimable', 'claimed', 'active'].includes(state) ? 'green' : ['unavailable', 'mismatch'].includes(state) ? 'coral' : 'neutral'}>{labels[state] || state}</Pill>;
 }
 export function EvidenceNote() { return <p className="portal-evidence"><ShieldCheck size={16}/><span>Records are published by the Perla operator. Native verification runs offchain; reward contracts enforce the funded allocation.</span></p>; }

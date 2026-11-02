@@ -2,7 +2,7 @@
 set +x
 set -euo pipefail
 cd -- "$(dirname -- "$0")"
-image=perla-rtx-worker:0.8.2
+image=perla-rtx-worker:0.9.0
 command="${1:-doctor}"
 if [ "$#" -gt 0 ]; then shift; fi
 case "$command" in

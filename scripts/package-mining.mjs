@@ -6,11 +6,11 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');const output=resolve(root,'public/downloads');await mkdir(output,{recursive:true});
-await build({entryPoints:[resolve(root,'lib/perla/rewards.ts')],outfile:resolve(root,'scripts/reward-allocation.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',target:'node24'});
+await build({entryPoints:[resolve(root,'lib/perla/reward-audit-entry.ts')],outfile:resolve(root,'scripts/reward-allocation.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',target:'node24'});
 const temp=await mkdtemp(join(tmpdir(),'perla-release-'));const worker=join(temp,'perla-worker');const operator=join(temp,'perla-operator');const rtx=join(temp,'perla-rtx-worker');
 try{
  await mkdir(rtx,{recursive:true});
- for(const file of ['Dockerfile','.dockerignore','build-cuda.sh','setup-worker.sh','rtx.cu','protocol.py','cuda_backend.py','reference.py','miner.py','test_protocol.py','doctor.py','perla','work-profiles.json','README.md','NOTICE.md'])await cp(resolve(root,'services/rtx-worker',file),join(rtx,file));
+ for(const file of ['Dockerfile','.dockerignore','build-cuda.sh','setup-worker.sh','rtx.cu','protocol.py','cuda_backend.py','reference.py','miner.py','test_protocol.py','doctor.py','perla','work-profiles.json','round-rules.json','README.md','NOTICE.md'])await cp(resolve(root,'services/rtx-worker',file),join(rtx,file));
  await cp(resolve(root,'services/pearl-adapter/perla_bridge.py'),join(rtx,'perla_bridge.py'));
  await cp(resolve(root,'LICENSE'),join(rtx,'PERLA-MIT-LICENSE.txt'));
  await mkdir(worker,{recursive:true});await mkdir(join(operator,'scripts'),{recursive:true});await mkdir(join(operator,'contracts'),{recursive:true});

@@ -22,9 +22,9 @@ export function fromBase64(s: string) {
   if (toBase64(a) !== s) throw Error('Non-canonical base64');
   return a;
 }
-export async function makeJobHeader(origin: string, worker: string, address: string, epoch: number, nonce: string, timestamp: number, bits = SHARE_BITS) {
+export async function makeJobHeader(origin: string, worker: string, address: string, epoch: number, nonce: string, timestamp: number, bits = SHARE_BITS, round?: {id:string;policyHash:string}) {
   const unhex = (s: string) => Uint8Array.from(s.match(/../g)!, x => parseInt(x, 16));
-  const previous = unhex(await digest(`perla-work-v4|${CHAIN_ID}|${origin}|${epoch}`));
+  const previous = unhex(await digest(`perla-work-v4|${CHAIN_ID}|${origin}|${epoch}${round ? `|round=${round.id}|policy=${round.policyHash}` : ''}`));
   const commitment = unhex(await digest(`perla-recipient-v4|${CHAIN_ID}|${worker}|${address}|${epoch}|${nonce}`));
   const a = new Uint8Array(76); const view = new DataView(a.buffer);
   view.setUint32(0, 1, true); a.set(previous.reverse(), 4); a.set(commitment.reverse(), 36);

@@ -1,3 +1,20 @@
+# Round-reward API additions — worker 0.9.0
+
+Amounts named budget, amount, reward, roundReward, roundRewardBaseUnits or rewardBaseUnits are **integer token base-unit strings** (18 decimals for reviewed PERL), unless a field explicitly ends in PERL. A task or accepted share does not mint or transfer tokens. Old technical `points` fields describe work weight for compatibility; they are not a points/token balance.
+
+- `GET /api/mining/rounds`: latest 20 rounds, with ID, UTC epoch, open/won/expired state, target, reward pool and winning receipt. Open-round rewards are conditional; expired rounds pay zero.
+- `GET /api/mining/rewards/summary`: policy/configuration status, dailyCap, earned network budget, roundReward, roundsWon/roundLimit, current round and UTC close/settlement times. No full-day proportional estimate is produced from ordinary shares.
+- `GET /api/mining/rewards/account`: signed wallet session required. Includes current earned round allocation and paginated published allocations with fresh claim status. Cancelled epochs are excluded. Unfunded legacy version-1 records are held for review; already active funded claims remain supported.
+- Worker work and share requests require `X-Perla-Protocol: perla-pearl-plain-v4` and `X-Perla-Reward-Policy: perla-rounds-v1`. The public protocol label is Perla Matrix v4.
+- Job `round` metadata includes ID, policy hash, bits, workUnits, windowWorkUnits and rewardBaseUnits. The original header commits to the exact round ID and reward-policy hash.
+- Accepted-share receipts include workWeight, roundId, roundWon and roundReward (base units; zero for an ordinary share). tokenReward is null: settlement remains separate.
+- An explicit HTTP 409 with `code: round_closed` or `code: job_expired` and `credited: false` can discard the old challenge and fetch fresh work. A duplicate receipt or ambiguous lost POST response never supplies a false safe-retry signal. GET work can wait and retry temporary server/rate-limit conditions; POST submissions are not blindly replayed.
+- Operator-only `POST /api/mining/operator/epochs/20754/cancel` performs the exact authorized owner validation cancellation with fresh canonical RPC checks and an audit tombstone. It cannot cancel arbitrary allocations or funded roots.
+- Operator-only `POST /api/mining/operator/reward-rounds/activate` pins/resumes the reviewed policy after native override readiness and legacy checks. It never backfills accepted history. `.../suspend` holds new round credits without rewriting history.
+- Version-2 manifests sum immutable per-round PPLNS allocations. Their policy hash, emission start, exact cap, round target/reward pairs, snapshots, Merkle root and individual proofs can be recomputed by the audit tooling. Version-1 funded claims retain their original leaf format and domain.
+
+See [complete round rules and deployment](REWARD-ROUNDS.md). Earlier endpoint documentation follows; the rules above supersede old full-budget/points explanations.
+
 # Participation portal API
 
 All routes are under `/api/mining`, return `Cache-Control: no-store`, and use the existing mining ledger. Public read routes expose only published contribution or allocation data.

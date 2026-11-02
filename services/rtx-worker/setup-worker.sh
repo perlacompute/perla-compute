@@ -12,6 +12,6 @@ if [[ ! -f perla_bridge.py ]]; then
   echo 'Use the complete perla-rtx-worker download, including perla_bridge.py.' >&2
   exit 1
 fi
-docker buildx build --load -t perla-rtx-worker:0.8.2 .
+docker buildx build --load -t perla-rtx-worker:0.9.0 .
 echo 'Built the RTX validation image for sm86, sm89 and sm120. Hardware validation is still required.'
-echo 'Run: docker run --rm --gpus all perla-rtx-worker:0.8.2 selftest --device 0'
+echo 'Run: docker run --rm --gpus all perla-rtx-worker:0.9.0 selftest --device 0'
