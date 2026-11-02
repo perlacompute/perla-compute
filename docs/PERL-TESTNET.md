@@ -14,9 +14,9 @@ The connector checks these deployment receipts against canonical blocks, compare
 
 ## Reward lifecycle
 
-Deploying the token does not activate mining, fund an epoch, or make a wallet eligible for rewards. The initial supply belongs to the deployer. Contributions are recorded offchain; an operator prepares a closed epoch, reviews its allocation, approves the budget, funds its Merkle root onchain, and separately activates the matching epoch in the coordinator. Claims pay the committed recipient.
+Contributions are recorded offchain. Ordinary shares alone unlock zero tokens. Qualifying reward rounds earn fixed portions of the daily cap and split them through PPLNS. The owner-authorized settlement service prepares and checks each earned daily manifest, approves its exact budget, funds the Merkle root and activates claims after UTC close plus five minutes. The dedicated owner signer is encrypted on the website VPS, never supplied to GPU hosts. All signing is restricted to chain 46630 and these pinned contracts.
 
-Use the configured PERLA_REWARD_TOKEN and PERLA_DISTRIBUTOR_ADDRESS together. Do not rerun token deployment merely to configure mining. A real GPU-to-receipt run and a separately funded test claim are still required before public reward activation.
+The fresh-testnet reset removes authorized old local worker and reward history and restarts the emission epoch once. A separate 1 PERL operator contract check creates no mining earning or migration entitlement. Public opening follows the fresh GPU-to-earned-claim checks shown on /status. Mainnet and bridge remain closed.
 
 ## Earlier tPERLA deployment
 

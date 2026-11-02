@@ -6,6 +6,7 @@ import { miningApi, useMiningAccount, type MiningAccount } from './mining-client
 import { CommandBlock } from './portal-ui';
 import { namedWorkerCommand, existingWorkerCommand, workerCommands, workerRelease } from '@/lib/perla/worker-release';
 import styles from './miner-setup.module.css';
+import { LaunchReadiness } from './launch-readiness';
 import { WorkerIdentity } from './worker-identity';
 
 export function SetupProgress({ account, compact = false }: { account: MiningAccount | null; compact?: boolean }) {
@@ -15,21 +16,22 @@ export function SetupProgress({ account, compact = false }: { account: MiningAcc
 export function MinerOnboarding({ initialWorkerId = '', reuseRequested = false, pairCode = '' }: { initialWorkerId?: string; reuseRequested?: boolean; pairCode?: string }) {
  const { account, loading, busy, error, signIn } = useMiningAccount();
  const [mode, setMode] = useState<'new' | 'reuse'>(initialWorkerId || reuseRequested ? 'reuse' : 'new'), [workerId, setWorkerId] = useState(initialWorkerId);
- const [wallet, setWallet] = useState(''), [name, setName] = useState('rig01'), [device, setDevice] = useState(0);
+ const [wallet, setWallet] = useState(''), [name, setName] = useState('rig01'), [device, setDevice] = useState(0), [fresh, setFresh] = useState(false);
  const [releaseReady, setReleaseReady] = useState(false), [releaseRead, setReleaseRead] = useState(false), [retry, setRetry] = useState(0);
- const [status, setStatus] = useState<{ miningEnabled: boolean } | null>(null), [legacyCode, setLegacyCode] = useState('');
+ const [status, setStatus] = useState<{ miningEnabled: boolean; launch?: {phase:string;resetAt:number}|null } | null>(null), [legacyCode, setLegacyCode] = useState('');
  useEffect(() => { setLegacyCode(pairCode); if (initialWorkerId || reuseRequested) { setWorkerId(initialWorkerId); setMode('reuse'); } }, [initialWorkerId, reuseRequested, pairCode]);
  useEffect(() => {
   const abort = new AbortController(); setReleaseRead(false); setReleaseReady(false);
   fetch('/api/worker-release', { signal: abort.signal, cache: 'no-store' }).then(r => r.json()).then(v => { if (!abort.signal.aborted) setReleaseReady(v.state === 'available' && v.integrityVerified === true && v.tag === workerRelease.tag); }).catch(() => {}).finally(() => { if (!abort.signal.aborted) setReleaseRead(true); });
-  miningApi<{ miningEnabled: boolean }>('status').then(setStatus).catch(() => {});
+  miningApi<{ miningEnabled: boolean; launch?: {phase:string;resetAt:number}|null }>('status').then(setStatus).catch(() => {});
   return () => abort.abort();
  }, [retry]);
- let start = ''; try { start = mode === 'reuse' ? existingWorkerCommand(workerId, device) : namedWorkerCommand(wallet, name, device); } catch {}
+ let start = ''; try { start = mode === 'reuse' ? existingWorkerCommand(workerId, device) : namedWorkerCommand(wallet, name, device, fresh); } catch {}
  const command = start ? workerCommands('rtx', device).install + ' && \\\n' + start : '';
  return <div className={'portal-workspace ' + styles.root} data-miner-setup="permanent-worker-v3">
   <header className={styles.intro}><div><span className="eyebrow">PERLA / MINER SETUP</span><h1>Create once.<br/><em>Keep your worker.</em></h1><p>Create a new worker or move an existing Worker ID to another GPU machine.</p></div><div className={styles.release}>WORKER {workerRelease.version}</div></header>
-  <div className={styles.status}><ShieldCheck size={18}/><div><strong>{status ? status.miningEnabled ? 'Work admission is open' : 'Work admission is paused' : 'Checking work admission…'}</strong><span>{status?.miningEnabled ? 'The worker validates your GPU, receives a challenge and keeps mining after accepted shares.' : 'You can connect a worker and validate your GPU now. Accepted work starts when the project admits mining.'}</span></div><Link href="/status">Service status<ArrowUpRight size={14}/></Link></div>
+  <div className={styles.status}><ShieldCheck size={18}/><div><strong>{status ? status.launch?.phase === 'testing' ? 'Operator validation is open' : status.miningEnabled ? 'Work admission is open' : 'Work admission is paused' : 'Checking work admission…'}</strong><span>{status?.launch?.phase === 'testing' ? 'The network has restarted. Test work uses the operator wallet until the complete GPU and reward checks pass.' : status?.miningEnabled ? 'The worker validates your GPU, receives a challenge and keeps mining after accepted shares.' : 'You can connect a worker and validate your GPU now. Accepted work starts when the project admits mining.'}</span></div><Link href="/status">Service status<ArrowUpRight size={14}/></Link></div>
+  <LaunchReadiness/>
   {legacyCode && <LegacyPairApproval code={legacyCode} account={account} signIn={signIn}/>}
   <section className={styles.minerFlow} aria-label="Generate your mining command">
    <div className={styles.minerIdentity}><span className="micro">01 / WORKER IDENTITY</span><h2>{mode === 'new' ? 'Create a new worker.' : 'Use an existing worker.'}</h2>
@@ -39,6 +41,7 @@ export function MinerOnboarding({ initialWorkerId = '', reuseRequested = false, 
     <small id="wallet-help">Public EVM address on Robinhood. Keep the private key in your wallet.</small>
     {account && <button className="button button-small" onClick={() => setWallet(account.address)}>Use connected wallet</button>}
     <label htmlFor="worker-name">Worker name</label><input id="worker-name" spellCheck={false} autoComplete="off" value={name} maxLength={48} onChange={e => setName(e.target.value)} aria-describedby="worker-help"/>
+    <label className={styles.reuseNote}><input type="checkbox" checked={fresh} onChange={e=>setFresh(e.target.checked)}/> Replace this GPU host’s saved connection</label><small>Enable once after the network reset or when deliberately creating a different worker. It keeps the verified CUDA build. Normal restarts reuse your saved Worker ID.</small>
     <small id="worker-help">A display label, for example home-4090. The same name on another fresh installation creates a different ID. To keep the old identity, choose Use existing worker.</small></> : <><p>Moving to a new VPS or GPU rental? Keep the same ID, name, wallet and contribution history.</p>
     {account?.workers.length ? <><label htmlFor="saved-worker">Choose from your wallet</label><select id="saved-worker" value={account.workers.some(w => w.id === workerId) ? workerId : ''} onChange={e => setWorkerId(e.target.value)}><option value="">Choose an existing worker…</option>{account.workers.map(w => <option key={w.id} value={w.id}>{w.name} · {w.id}{w.revoked ? ' · access revoked' : ''}</option>)}</select></> : null}
     <label htmlFor="existing-worker-id">Permanent Worker ID</label><input id="existing-worker-id" spellCheck={false} autoComplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={workerId} maxLength={36} onChange={e => setWorkerId(e.target.value.trim().toLowerCase())} aria-describedby="worker-id-help"/>
@@ -49,7 +52,7 @@ export function MinerOnboarding({ initialWorkerId = '', reuseRequested = false, 
    </div>
    <div className={styles.minerCommand}><span className="micro">02 / GPU TERMINAL</span><h2>Install and start.</h2><p>Copy the generated command to your GPU machine. {mode === 'reuse' ? 'It installs the pinned release, requests owner approval for the existing ID, then prepares and checks this GPU.' : 'It installs the pinned release, creates the connection, prepares the runtime and checks the GPU automatically.'}</p>
     {!start ? <div className={styles.commandEmpty}><Terminal size={25}/><strong>Your command will appear here.</strong><span>{mode === 'reuse' ? 'Enter the full permanent Worker ID.' : 'Enter a valid reward address and worker name.'}</span></div> : !releaseReady ? <div className={styles.commandEmpty} role="status"><strong>{releaseRead ? 'Installer availability not confirmed' : 'Checking the GitHub release…'}</strong><span>Commands appear when the pinned public release and its checksums pass verification.</span>{releaseRead && <button className="button button-small" onClick={() => setRetry(n => n + 1)}>Retry check</button>}</div> : <CommandBlock label="Run on your Linux GPU host" value={command}/>}
-    {mode === 'reuse' && <p className={styles.reuseNote}>Worker 0.9.0 supports continuous mining and this command. The owner wallet is used on the approval website; the GPU terminal never asks for its private key. A running process uses its saved credential until you stop it or move the ID again.</p>}
+    {mode === 'reuse' && <p className={styles.reuseNote}>Worker 0.9.1 supports continuous mining and this command. The owner wallet is used on the approval website; the GPU terminal never asks for its private key. A running process uses its saved credential until you stop it or move the ID again.</p>}
     <p className={styles.validationNote}>Mining continues after accepted shares. On a native GPU host, press Ctrl+C to stop; for a Docker worker, run perla stop. Add --shares 1 only for a one-share test. While admission is paused, the worker uploads its GPU check and exits without requesting work.</p>
     <p className={styles.validationNote}>A task is a challenge assigned by the coordinator. Receiving one creates no token reward. An accepted share means a submitted proof passed verification; PERL claims depend on the published, funded reward allocation.</p>
     <a className="arrow-link" href={workerRelease.page} target="_blank" rel="noreferrer">Verified release & source<ArrowUpRight size={14}/></a>

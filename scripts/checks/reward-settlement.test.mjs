@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, mkdtemp } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -10,8 +10,8 @@ import { settleRewards } from '../reward-settle.mjs';
 import { dailyBudget } from '../../lib/perla/emission.mjs';
 import { createSqliteDatabase } from '../../lib/vps/sqlite.mjs';
 import deployment from '../../deployments/robinhood-testnet.json' with { type: 'json' };
-const root=resolve(import.meta.dirname,'../..'),scratch=resolve(root,'.sites-runtime/reward-settlement-checks');await mkdir(scratch,{recursive:true});
-for(const name of ['reward-rounds','reward-schedule','coordinator','portal'])await build({entryPoints:[resolve(root,'lib/perla/'+name+'.ts')],outfile:resolve(scratch,name+'.mjs'),bundle:true,platform:'node',format:'esm',target:'node24'});
+const root=resolve(import.meta.dirname,'../..'),scratch=await mkdtemp(resolve(root,'.sites-runtime-settlement-'));
+for(const name of ['reward-rounds','reward-schedule','coordinator','portal'])await build({entryPoints:[resolve(root,'lib/perla/'+name+'.ts')],outfile:resolve(scratch,name+'.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',target:'node24'});
 let schedule=await import(pathToFileURL(resolve(scratch,'reward-schedule.mjs'))),{handleMiningRequest}=await import(pathToFileURL(resolve(scratch,'coordinator.mjs'))),{accountRewards}=await import(pathToFileURL(resolve(scratch,'portal.mjs')));
 const engine=await import(pathToFileURL(resolve(scratch,'reward-rounds.mjs')));
 const db=createSqliteDatabase(':memory:');db.migrate(resolve(root,'drizzle'));
@@ -51,7 +51,7 @@ try{
  const local={...env,PERLA_RPC_URL:rpc,PERLA_REWARD_TOKEN:token.address,PERLA_DISTRIBUTOR_ADDRESS:distributor.address,PERLA_SETTLEMENT_DIR:resolve(scratch,'journals')};
  const localDeployment={...deployment,token:token.address,distributor:distributor.address,owner,distributorTransaction:distributor.hash};
  // Rebundle only this test with its deployed local addresses. Production address pins stay strict.
- for(const name of ['reward-schedule','coordinator','portal'])await build({entryPoints:[resolve(root,'lib/perla/'+name+'.ts')],outfile:resolve(scratch,name+'-local.mjs'),bundle:true,platform:'node',format:'esm',target:'node24',plugins:[{name:'local-deployment-fixture',setup(b){b.onLoad({filter:/deployments\/robinhood-testnet\.json$/},()=>({contents:JSON.stringify(localDeployment),loader:'json'}));}}]});
+ for(const name of ['reward-schedule','coordinator','portal'])await build({entryPoints:[resolve(root,'lib/perla/'+name+'.ts')],outfile:resolve(scratch,name+'-local.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',target:'node24',plugins:[{name:'local-deployment-fixture',setup(b){b.onLoad({filter:/deployments\/robinhood-testnet\.json$/},()=>({contents:JSON.stringify(localDeployment),loader:'json'}));}}]});
  ({handleMiningRequest}=await import(pathToFileURL(resolve(scratch,'coordinator-local.mjs'))));({accountRewards}=await import(pathToFileURL(resolve(scratch,'portal-local.mjs'))));
  const options={env:local,transport:http(rpc),deployment:localDeployment,operator:(path,payload)=>op(path,payload,local),log:()=>{}};
  let review;

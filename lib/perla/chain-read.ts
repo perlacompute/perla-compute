@@ -4,7 +4,7 @@ export function rewardClient(env:{PERLA_RPC_URL?:string}) {
   const endpoint=env.PERLA_RPC_URL || 'https://rpc.testnet.chain.robinhood.com';
   const u=new URL(endpoint);
   if(u.username||u.password||u.hash||(u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname))))throw Error('Invalid testnet RPC.');
-  return createPublicClient({transport:http(endpoint,{timeout:5000,retryCount:0})});
+  return createPublicClient({transport:http(endpoint,{timeout:15000,retryCount:1,retryDelay:350})});
 }
 export async function chainSnapshot(env:{PERLA_RPC_URL?:string}) {
   const client=rewardClient(env);

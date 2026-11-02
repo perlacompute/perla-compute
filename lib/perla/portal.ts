@@ -5,7 +5,7 @@ import { CHAIN_ID, JOB_TTL, PROTOCOL, UPSTREAM_COMMIT, currentEpoch, digest, fro
 import { createManifest, rewardsAbi } from './rewards';
 import { workPolicy } from './work-policy';
 import { treasurySnapshot } from './treasury';
-import { chainSnapshot, assertCanonical } from './chain-read';
+import { chainSnapshot, assertCanonical, rewardClient } from './chain-read';
 import recordedDeployment from '@/deployments/robinhood-testnet.json';
 
 export type PortalEnv = { DB?: MiningDatabase; PERLA_RPC_URL?: string; PERLA_MINING_ENABLED?: string; PERLA_REWARD_TOKEN?:string; PERLA_DISTRIBUTOR_ADDRESS?:string };
@@ -37,12 +37,7 @@ function manifestFor(row: EpochRow): Manifest {
   manifests.set(key, m); return m;
 }
 
-function rpc(env: PortalEnv) {
-  const endpoint = env.PERLA_RPC_URL || 'https://rpc.testnet.chain.robinhood.com';
-  const u = new URL(endpoint);
-  if (u.username || u.password || u.hash || (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname)))) throw Error('Invalid reward RPC.');
-  return { endpoint, client: createPublicClient({ transport: http(endpoint, { timeout: 5000, retryCount: 0 }) }) };
-}
+function rpc(env: PortalEnv) { return {client:rewardClient(env)}; }
 type TokenInfo = { symbol: string; decimals: number } | null;
 type ChainEpoch = { verification: 'funded' | 'unfunded' | 'mismatch' | 'unavailable'; remaining: string | null; checkedAt: number; tokenInfo: TokenInfo };
 async function chainEpoch(env: PortalEnv, row: EpochRow): Promise<ChainEpoch> {

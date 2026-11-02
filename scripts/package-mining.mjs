@@ -26,7 +26,7 @@ try{
  await cp(resolve(root,'scripts/perla-rewards.mjs'),join(operator,'scripts/perla-rewards.mjs'));
  for(const n of ['PerlaRewards.sol','PerlaTestToken.sol'])await cp(resolve(root,'contracts',n),join(operator,'contracts',n));
  await writeFile(join(operator,'package.json'),JSON.stringify({name:'perla-mining-operator',private:true,type:'module',engines:{node:'>=22.13.0'},dependencies:{viem:'2.57.7',solc:'0.8.37'}},null,2)+'\n');
- await writeFile(join(worker,'README.txt'),'Perla worker adapter 0.1\nRead the website installation guide before running setup-worker.sh.\nSupported upstream profile: Linux, NVIDIA sm90 (H100/H200), dense rank-128 certificate v3.\nDownload your worker.env from the signed-in dashboard. No private wallet key is needed.\nGPU validation and operator activation are separate from software installation.\n');
+ await writeFile(join(worker,'README.txt'),'Perla worker adapter 0.1\nRead the website installation guide before running setup-worker.sh.\nSupported upstream profile: Linux, NVIDIA sm90 (H100/H200), dense rank-128 certificate v3.\nUse the pinned GitHub installer and perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01. Configuration is saved automatically; no private wallet key is needed.\nGPU validation and operator activation are separate from software installation.\n');
  const sums=[];
  for(const name of ['perla-worker','perla-operator','perla-rtx-worker']){
   const archive=resolve(output,name+'.tar.gz');const result=spawnSync('tar',['--sort=name','--mtime=UTC 2026-10-22','--owner=0','--group=0','--numeric-owner','-czf',archive,'-C',temp,name],{encoding:'utf8'});if(result.status)throw Error(result.stderr||'Could not package mining adapter');

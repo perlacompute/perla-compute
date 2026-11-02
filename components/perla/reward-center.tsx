@@ -1,4 +1,5 @@
 'use client';
+import {LaunchReadiness} from './launch-readiness';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { encodeFunctionData, type Address, type Hex } from 'viem';
@@ -129,7 +130,7 @@ export function RewardCenter({ initialTab = 'epochs', compact = false }: { initi
   return <div className={compact ? 'reward-center portal-compact' : 'reward-center'}>
     {!compact && <div className="portal-intro"><div><span className="eyebrow">PERLA / REWARD CENTER</span><h1>From accepted work.<br/><em>To a funded allocation.</em></h1><p>Follow published epoch budgets, inspect distributions, and claim eligible testnet rewards.</p></div><EpochClock/></div>}
     {!compact && <><RewardAllocationPlan/><TreasuryPanel/></>}
-    <LiveRewardSummary current={currentRewards?.current}/>
+    <LaunchReadiness/><LiveRewardSummary current={currentRewards?.current}/>
     <div className="portal-tabs" role="group" aria-label="Reward views"><button aria-pressed={tab === 'epochs'} className={tab === 'epochs' ? 'active' : ''} onClick={() => setTab('epochs')}>Network epochs</button><button aria-pressed={tab === 'mine'} className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>My rewards</button><span>Robinhood Testnet</span></div>
     {tab === 'epochs' ? <section className="portal-card"><div className="portal-card-head"><div><span className="micro">PUBLISHED DISTRIBUTIONS</span><h2>Every epoch, explained.</h2></div><button className="icon-btn" aria-label="Refresh published epochs" disabled={loadingEpochs} onClick={() => void loadEpochs()}><RefreshCw size={17}/></button></div>
       {networkError && <p className="portal-error" role="alert">{networkError}</p>}

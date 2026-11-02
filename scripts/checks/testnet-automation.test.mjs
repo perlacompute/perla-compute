@@ -1,0 +1,54 @@
+/** Real EVM funding/claims and SQLite routes. GPU, verifier and GitHub inputs are explicit doubles. */
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import ganache from 'ganache';
+import {createWalletClient,createPublicClient,http,defineChain} from 'viem';
+import {compileContracts} from '../perla-rewards.mjs';
+import {automaticTick,distributorAbi,tokenAbi} from '../testnet-control.mjs';
+import {createSqliteDatabase} from '../../lib/vps/sqlite.mjs';
+import {dailyBudget} from '../../lib/perla/emission.mjs';
+const root=resolve(import.meta.dirname,'../..'),temp=await mkdtemp(resolve(root,'.sites-runtime-automation-'));
+const server=ganache.server({logging:{quiet:true},chain:{chainId:46630},wallet:{deterministic:true}});await server.listen(0,'127.0.0.1');
+const rpc='http://127.0.0.1:'+server.address().port,transport=http(rpc),chain=defineChain({id:46630,name:'Local EVM fixture',nativeCurrency:{name:'ETH',symbol:'ETH',decimals:18},rpcUrls:{default:{http:[rpc]}}});
+const wallet=createWalletClient({chain,transport}),client=createPublicClient({chain,transport}),[owner,bob]=await wallet.getAddresses();
+const key=server.provider.getInitialAccounts()[owner.toLowerCase()].secretKey;
+const contracts=await compileContracts();async function deploy(n,args=[]){const h=await wallet.deployContract({account:owner,...contracts[n],args,gas:5000000n});return {address:(await client.waitForTransactionReceipt({hash:h})).contractAddress,hash:h};}
+const originalFetch=globalThis.fetch;let db,pass=0;async function test(n,f){await f();pass++;console.log('PASS',n);}
+try{
+ const t=await deploy('PerlaTestToken'),d=await deploy('PerlaRewards',[t.address]);
+ const deployment={chainId:46630,token:t.address,distributor:d.address,owner,distributorTransaction:d.hash};
+ await build({entryPoints:[resolve(root,'lib/perla/coordinator.ts')],outfile:join(temp,'coordinator.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',plugins:[{name:'explicit-test-doubles',setup(b){b.onLoad({filter:/deployments\/robinhood-testnet\.json$/},()=>({loader:'json',contents:JSON.stringify(deployment)}));b.onLoad({filter:/worker-release-server\.ts$/},()=>({loader:'js',contents:"export async function resolveWorkerRelease(){return {state:'available',tag:'worker-v0.9.1',integrityVerified:true}}"}));}}]});
+ const {handleMiningRequest}=await import(pathToFileURL(join(temp,'coordinator.mjs')));
+ globalThis.fetch=(url,...args)=>String(url).startsWith('https://verifier.test/')?Promise.resolve(Response.json({ready:true,protocol:'perla-pearl-plain-v4',supported_protocols:['perla-pearl-plain-v4'],upstream_commit:'82e6eee7076aafe10123e08db78f100d270c0582',round_target_policy:'perla-rounds-v1'})):originalFetch(url,...args);
+ db=createSqliteDatabase(':memory:');db.migrate(resolve(root,'drizzle'));const now=Math.floor(Date.now()/1000),today=Math.floor(now/86400),epoch=today-1;
+ const env={DB:db,PERLA_RPC_URL:rpc,PERLA_MINING_ENABLED:'true',PERLA_REWARD_TOKEN:t.address,PERLA_DISTRIBUTOR_ADDRESS:d.address,PERLA_OPERATOR_TOKEN:'local-operator-test-'.repeat(4),PERLA_VERIFIER_URL:'https://verifier.test',PERLA_VERIFIER_TOKEN:'test-verifier-secret-'.repeat(4),PERLA_SETTLEMENT_DIR:join(temp,'journals')};
+ const token='aa'.repeat(32);const {createHash}=await import('node:crypto');const hash=v=>createHash('sha256').update(v).digest('hex');
+ await db.prepare("INSERT INTO mining_policy_state VALUES(1,'p1',?,?,'test-validation','89','0.5.0')").bind(epoch,now-90000).run();
+ await db.prepare("INSERT INTO mining_reward_policy VALUES(1,'perla-testnet-daily-v1',?,?,?,?)").bind(epoch,t.address.toLowerCase(),d.address.toLowerCase(),now-90000).run();
+ const ROUND_POLICY_HASH='815efedf86e62a15e709bddfb4bad13569ddc24e714614e56fdcccaba8bc15d5';
+ await db.prepare('INSERT INTO mining_round_policy VALUES(1,?,?,?,0)').bind(ROUND_POLICY_HASH,now-90000,epoch).run();
+ await db.prepare("INSERT INTO mining_testnet_state(id,reset_id,reset_at,phase) VALUES(1,'fixture-reset',?,'testing')").bind(now-90000).run();
+ async function req(path,payload,auth=true){return handleMiningRequest(new Request('https://perla.test/api/mining/'+path,{method:payload===undefined?'GET':'POST',headers:{'content-type':'application/json',...(auth?{authorization:'Bearer '+env.PERLA_OPERATOR_TOKEN}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})}),env);}
+ async function op(path,payload){const r=await req(path,payload);const b=await r.json();if(!r.ok)throw Error(b.error+' ['+path+']');return b;}
+ await test('public callers cannot enable automation or open mining',async()=>{assert.equal((await req('operator/testnet/automation',{enabled:true,error:null},false)).status,401);assert.equal((await req('operator/testnet/live',{},false)).status,401);});
+ await test('an empty fresh network cannot be promoted to live',async()=>{const r=await req('operator/testnet/live',{});assert.equal(r.status,409);const b=await r.json();assert.equal(b.ready,false);assert(b.checks.some(c=>c.id==='earned_reward_claim'&&!c.passed));});
+ await db.prepare("INSERT INTO mining_workers(id,address,name,token_hash,created) VALUES('bob-worker',?,'bob',?,?)").bind(bob.toLowerCase(),hash(token),now).run();
+ await test('owner validation phase refuses public-wallet work before issuing a job',async()=>{const r=await handleMiningRequest(new Request('https://perla.test/api/mining/work',{headers:{authorization:'Bearer '+token}}),env);assert.equal(r.status,503);assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_jobs').first()).n,0);});
+ const options={transport,deployment};
+ await test('empty automation tick performs only the isolated smoke and creates no mining allocation',async()=>{const result=await automaticTick({key,env,options,operator:op,log:()=>{}});assert.equal(result.publicMiningOpened,false);assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_reward_epochs').first()).n,0);assert.equal((await db.prepare('SELECT smoke_verified FROM mining_testnet_state').first()).smoke_verified,1);const r=await op('operator/testnet/readiness');assert(r.checks.find(c=>c.id==='contract_smoke').passed);assert(!r.checks.find(c=>c.id==='earned_reward_claim').passed);});
+ await test('an interrupted or failing tick records failure and cannot mark the service healthy',async()=>{await assert.rejects(()=>automaticTick({key,env,options,operator:async(path,payload)=>{if(path==='operator/rewards')throw Error('simulated coordinator outage');return op(path,payload);},log:()=>{}}),/simulated/);assert.equal((await db.prepare('SELECT automation_error FROM mining_testnet_state').first()).automation_error,'settlement_check_failed');});
+ // Deliberate GPU doubles: seeded accepted shares and a won-round snapshot test accounting only.
+ await db.prepare("INSERT INTO mining_workers(id,address,name,token_hash,created) VALUES('gpu-owner',?,'fixture-gpu','owner-hash',?)").bind(owner.toLowerCase(),now-90000).run();
+ await db.prepare("INSERT INTO mining_worker_validations VALUES('gpu-owner',?,'fixture-report',?)").bind(JSON.stringify({gpuSelfTestPassed:true,device:{name:'Explicit GPU test double'}}),now).run();
+ for(let i=0;i<3;i++)await db.prepare('INSERT INTO mining_shares VALUES(?,?,?,?,?,?,?,1)').bind(['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333'][i],'job-'+i,'gpu-owner',owner.toLowerCase(),epoch,'proof-'+i,now-90000+i*301).run();
+ await db.prepare("INSERT INTO mining_reward_rounds(id,epoch,policy_hash,difficulty_weight,target_bits,reward,opened,closed,state,winner_share,snapshot) VALUES('44444444-4444-4444-8444-444444444444',?,?,256,469827583,?,?,?,'won','33333333-3333-4333-8333-333333333333',?)").bind(epoch,ROUND_POLICY_HASH,(dailyBudget(1)/446n).toString(),now-90000,now-89000,JSON.stringify([{address:owner.toLowerCase(),workUnits:3}])).run();
+ await test('complete automatic tick funds only earned rounds and relays the real contract claim',async()=>{const result=await automaticTick({key,env,options,operator:op,log:()=>{}});assert.deepEqual(result.fundedEpochs,[epoch]);const row=await db.prepare('SELECT * FROM mining_reward_epochs WHERE epoch=?').bind(epoch).first();assert.equal(row.state,'active');assert.equal(BigInt(row.budget),dailyBudget(1)/446n);assert.equal(await client.readContract({address:d.address,abi:distributorAbi,functionName:'isClaimed',args:[BigInt(epoch),0n]}),true);assert.equal((await client.readContract({address:d.address,abi:distributorAbi,functionName:'epochs',args:[BigInt(epoch)]}))[2],0n);assert.equal(result.publicMiningOpened,true,JSON.stringify(await op('operator/testnet/readiness')));});
+ await test('public opening requires the actual earned claim and preserves all fresh history',async()=>{const report=await op('operator/testnet/readiness');assert.equal(report.ready,true,JSON.stringify(report));assert.equal(report.phase,'live');assert.equal(report.acceptedShares,3);assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_shares').first()).n,3);});
+ await test('rerunning automatic settlement creates no additional transfer or claim',async()=>{const before=await client.getTransactionCount({address:owner});await automaticTick({key,env,options,operator:op,log:()=>{}});assert.equal(await client.getTransactionCount({address:owner}),before);});
+ await test('expired automation heartbeat blocks a fresh readiness claim',async()=>{await db.prepare('UPDATE mining_testnet_state SET automation_checked=? WHERE id=1').bind(now-900).run();const report=await op('operator/testnet/readiness');assert.equal(report.ready,false);assert(!report.checks.find(c=>c.id==='automatic_settlement').passed);});
+ await test('RPC outage cannot turn an unavailable treasury into passed readiness',async()=>{const saved=env.PERLA_RPC_URL;env.PERLA_RPC_URL='http://127.0.0.1:1';try{const report=await op('operator/testnet/readiness');assert(!report.checks.find(c=>c.id==='treasury').passed);assert.equal(report.ready,false);}finally{env.PERLA_RPC_URL=saved;}});
+ console.log(pass+' automatic testnet lifecycle checks passed using real SQLite/EVM; GPU, verifier and GitHub were test doubles.');
+}finally{globalThis.fetch=originalFetch;db?.close();await server.close();await rm(temp,{recursive:true,force:true});}

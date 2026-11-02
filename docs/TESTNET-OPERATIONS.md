@@ -1,86 +1,57 @@
-# Round rewards update
+# Perla testnet operations — worker 0.9.1
 
-Worker-v0.9.0 is required for round work. See [the complete round rules](https://github.com/perlacompute/perla-compute/blob/main/docs/REWARD-ROUNDS.md). Shares alone unlock no tokens; UTC budgets are caps. Earlier daily full-budget examples below are historical and superseded.
+The current operator workflow is the fresh-testnet installer. Mainnet and migration remain closed.
 
-# Perla 0.5.0 testnet operations
+## Fresh generation and reset
 
-Mainnet is on hold. This release supports Robinhood Testnet 46630 only. The active testnet token is PERL with a fixed 1B supply and a new matching distributor. Mainnet is a separate planned deployment; testnet balances do not establish a conversion right. See PERL-TESTNET.md for current addresses and the migration guard.
+The installer is authorized to remove the old testnet dataset: all worker IDs and credentials, pairing/reconnect requests, wallet sessions, jobs, accepted shares, counters, reward rounds, allocations and cancellation history. It takes a private offline SQLite backup before deletion. The active database restarts from zero, with a new UTC emission start and the existing token/distributor. It is a one-time operation: rerunning the same installer preserves every new worker and contribution. Applied migrations are never rewritten. Public blockchain transactions are immutable; removing local history cannot erase them.
 
-## Upgrade order
+## Install and start a GPU
 
-Use the cumulative `perla-testnet-0.5.0.zip` updater. It accepts known 0.3.0 and 0.4.0-rc.1 source bytes, stops on local conflicts before editing, backs up source, upgrades the dual-protocol verifier with admission paused, builds the web image, runs route checks and installs health/backup timers. It never enables work or funds rewards. A web rollback retains the backward-compatible dual-protocol verifier; the verifier installer has its own rollback if its health or proof checks fail.
+Use https://perlacompute.xyz/platform/setup. Linux NVIDIA RTX 30/40/50 targets are included. GPU 0 is the first visible GPU; one-GPU machines keep 0. The installer automatically chooses native CUDA when Docker is unavailable. No worker.env or validation report transfer is required.
 
-The database migration is additive. Historical v3 jobs retain target 0x207fffff, one point and their original protocol label. Historical shares, funded roots and contracts are not rewritten. Backups include the database and deployment environment, so they are always encrypted. The restore drill reads a separate database in an isolated container and never replaces the live volume.
-
-## Difficulty and contribution scoring
-
-Current work protocol: `perla-pearl-plain-v4`; native certificate remains v3 and upstream remains pinned to `82e6eee7076aafe10123e08db78f100d270c0582`.
-
-The policy definitions are `lib/perla/work-profiles.json`, also shipped in the RTX worker. Reference target: `0x1d00ffff`. Profiles p1/p2/p4/p8/p16 award 1/2/4/8/16 points per verified job. Each target is exactly referenceTarget / points. Native PoW scales by opened tile area and K. V4 admits dense rank-128 work, K 2048..32768, tile area at most 256; this keeps the native target below uint256 overflow. Client-reported speed, GPU name, uptime and attempted work earn no points.
-
-Each job stores its protocol, bits, points, profile and policy hash at issuance. Changing a profile does not reprice an existing job. One job can be credited once. After the UTC epoch closes and outstanding jobs expire, rewards use the existing deterministic integer allocation and largest-remainder method. The pinned reward schedule derives the budget from the validated mining start epoch and rejects manual overrides. Root publication remains operator controlled; verification is offchain.
-
-Fresh policy state is inactive. Worker setup is `perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1`. The public address routes rewards; it does not authenticate wallet ownership. Browser wallet approval remains required for account management and claims. Reports upload through the authenticated worker connection; operators do not ask miners to copy files to the website VPS.
-
-For a controlled trial, run on the website VPS:
+After the reset, update once and create a fresh connection:
 
 ```bash
-bash scripts/perla-trial.sh review
-bash scripts/perla-trial.sh start
+"$HOME/.local/bin/perla" update --release worker-v0.9.1
+"$HOME/.local/bin/perla" start --new-worker --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0
 ```
 
-Start requires exactly one eligible uploaded report unless a reviewed worker ID is supplied. It grants that named worker at most one accepted share for 15 minutes. The commit-time SQL quota also applies to concurrent proofs from distinct jobs. Public admission and reward funding remain unchanged. The miner then reruns `perla start --device 0 --shares 1`. Use `bash scripts/perla-trial.sh stop WORKER_ID` to revoke the trial immediately.
-
-Reports are worker-supplied assertions, not hardware attestation. Review the actual device and checks. General public policy activation remains a separate operator action and must not be presented as a miner setup step.
-
-No universal hashrate, earnings, AI inference throughput or one-person-one-worker guarantee is made. Rate limits bound requests per worker/wallet and global auth load; they do not prevent identities from being created outside the service.
-
-## Worker diagnostics
-
-The downloadable RTX package includes `perla`, `doctor.py` and all source. `bash perla doctor` reports local NVIDIA, Docker, Buildx, image and authenticated coordinator access. It requests no work and submits no share. `gpuSelfTestPassed` stays unknown until the separate offline self-test. The doctor still requires an active registered worker configuration for its authenticated check, while admission may remain paused.
-
-`bash perla mine --device 0 --shares 1` runs the GPU self-test before online work, retries non-winning matrix attempts and refreshes work approximately every 15 seconds. Expired attempts are discarded. Ambiguous share POSTs are not automatically retried; inspect the job in the ledger first. Rejected/stale/duplicate counters reflect requests observed by the coordinator; local non-winning attempts and local expiry discards are miner logs, not accepted work.
-
-## Treasury and claims
-
-`GET /api/mining/treasury` reads token supply, distributor balance, owner holdings and the remaining budget of published matching epochs at one canonical latest block. Owner holdings are uncommitted. The mapping can contain epochs outside this coordinator; the displayed liability sum explicitly covers only published records. RPC failure is unavailable, never zero. This testnet release reconciles up to 32 published epochs per request; extend/paginate that bound before exceeding it.
-
-`node scripts/perla-audit.mjs epoch-N.json` reproduces allocation ordering, amounts, root and proofs offline. This validates the manifest, not the underlying GPU or chain funding. Download manifests from the epoch page. The existing fund command sends real testnet transactions only when explicitly invoked locally with the dedicated wallet; installation does not invoke it.
-
-Record a known funding transaction with `node scripts/perla-control.mjs record-funding EPOCH TX_HASH`. The server verifies its canonical successful receipt, distributor, EpochFunded event, token, root and budget before recording the trace. The epoch page labels it as recorded, not irrevocably final. Re-run record-funding after a suspected reorg; inspect the explorer as well. Reward availability is read from current contracts independently of this trace.
-
-The Reward Center tracks pending, included, finalized and reverted transactions. Inclusion is a sequencer/block receipt and can change before finalization. If `finalized` RPC tags are unavailable, the UI retains included status. Contract claim state is refreshed, and reorged/missing receipts return to pending. RPC failures never authorize a duplicate claim automatically.
-
-## Health, backups and recovery
+Stop an existing miner before update. `--new-worker` deliberately replaces this host connection and retains the verified CUDA build. Use it once. Normal restarts:
 
 ```bash
-python3 scripts/perla-ops.py health --project /var/www/perla-vps
-python3 scripts/perla-ops.py backup --project /var/www/perla-vps
-python3 scripts/perla-ops.py restore-check --project /var/www/perla-vps --archive /var/backups/perla/ARCHIVE.tar.enc
-systemctl list-timers 'perla-*'
-journalctl -u perla-health.service -u perla-backup.service --since today
+"$HOME/.local/bin/perla" start --device 0
 ```
 
-The installer runs an initial backup and isolated restore drill before enabling timers. Health runs every five minutes; backup and restore drill run daily at 03:15 UTC and retain 14 authenticated archive pairs. Failures are visible in systemd/journal. External notification and offsite destinations are not configured. Arrange an offsite copy of encrypted archives and a separate private copy of `/etc/perla/backup.key`; losing that key prevents restore. Never paste the key into chat or an issue.
+Continuous operation is the default. `--shares 1` is only a single-share test and cannot complete the sustained-operation check. Stop native mining with Ctrl+C; use `perla stop` for Docker. New IDs can later move to another host with `perla start --worker-id ID --device 0` and owner-wallet approval. IDs erased by this reset cannot reconnect.
 
-Backups use consistent SQLite VACUUM INTO, AES-256-CBC with PBKDF2 (600,000 iterations, random salt), and an HMAC-SHA256 verified before decryption. A root-owned 600 key file is generated locally. The database and deployment environment are enclosed in one authenticated encrypted archive. A second container, network disabled and filesystem read-only, checks database integrity, foreign keys and ledger counts.
+## Work, rounds and earning
 
-The restore-check command deliberately does not restore into production. For an actual recovery, pause admission, stop the web writer, preserve the current volume, decrypt privately, verify the archive and restore drill, restore into a fresh volume, then compare counts/epochs/contracts before switching the service. Keep the original volume until validation completes. Never restore an old reward database without reconciling funded roots and claims against the chain.
+A normal share records exact work weight; it is not a points balance or a token payout. The original native proof must also meet the harder round target to win a reward. The PPLNS window includes the latest weighted shares up to twice round difficulty. Initial difficulty is 256 reference work units, bounded to 2048; the controller considers 16 completed rounds around a 194-second target. These parameters are not a hardware throughput benchmark. The daily cap declines using the published emission curve. Each qualifying round earns floor(daily cap / 446), up to 446 rounds daily. No winner means zero reward. Unused capacity stays in treasury, with no rollover. Tasks are issued immediately; receiving one earns no tokens.
 
-## GitHub and releases
+## Automatic settlement
 
-GitHub account access is required to create/push the repository. No remote repository is assumed by this source. After connecting, select the actual account/repository, run the publication audit, and push a clean source-only tree. Keep data, environment files, backups, credentials and GPU reports private. Enable GitHub private vulnerability reporting and branch protection in that repository before advertising them.
+The installer reads the dedicated testnet owner key silently on the website VPS, validates the reviewed 46630 contracts and encrypts it with `systemd-creds --with-key=host`. The application environment, GitHub source and GPU hosts receive no wallet private key. The encrypted systemd service prepares, checks, funds and activates earned closed epochs every two minutes, starting from UTC close plus five minutes. It approves exact budgets only. Transaction journals reconcile interrupted operations before a new payment. Only the pinned PERL token and distributor on chain 46630 are accepted.
 
-CI checks software and CUDA compilation on CPU runners; it does not prove physical GPU compatibility. Actions are pinned to reviewed tag commits. A matching version tag triggers checks, a CycloneDX SBOM, checksummed artifacts, build provenance and a draft release. The workflow performs no chain operation or public mining activation. GitHub attestations require the repository/plan to support the feature; review workflow results before publishing a draft.
+```bash
+cd /var/www/perla-vps
+bash scripts/perla-rewards.sh health
+systemctl status perla-rewards-auto.timer perla-rewards-auto.service
+journalctl -u perla-rewards-auto.service -n 40 --no-pager
+```
 
+Manual review and recovery remain available with `bash scripts/perla-rewards.sh review` and `bash scripts/perla-rewards.sh settle`. The owner wallet needs test ETH. Signer encryption is tied to this VPS: on a future host, configure the credential again with the owner key; copying its encrypted file alone is insufficient.
 
-## Daily reward settlement
+## Contract smoke and public opening
 
-`bash scripts/perla-rewards.sh` prepares up to 32 closed, unsettled epochs, reviews exact PERL budgets and roots, reads the dedicated testnet owner key silently, funds missing roots, records canonical funding and activates claims. It stores transaction hashes for recovery, never the private key. Rerunning reconciles already funded roots. `review` and `prepare` send no chain transactions; both may idempotently publish prepared manifests.
+The initial service run performs an isolated 1 PERL fund-and-claim round trip back to the owner in a separate uint256 namespace. It is recorded separately and creates no mining reward, contribution or migration entitlement. During testing only the operator reward wallet receives work. Actual owner-earned allocations are automatically relayed after daily settlement, providing evidence for the real GPU-to-wallet lifecycle.
 
-`perla-rewards-prepare.timer` prepares closed manifests daily and retries every 15 minutes. It has no signing key. Budget enforcement is in the coordinator, not in the deployed distributor. Funding remains explicit. Preparation begins at 00:05 UTC (07:05 WIB). Empty epochs create no allocation and have no rollover. Mainnet remains held.
+Public mining opens automatically only after all fresh checks pass: native verifier and release integrity, a passing GPU report, at least three accepted shares spanning five minutes, a qualifying reward-round win, fresh treasury reconciliation, a recent successful scheduler heartbeat, the isolated contract check and a real earned reward claim. No fabricated winner, backdated production epoch or early mutable Merkle root is used to bypass the daily settlement window. Inspect /status or /api/mining/readiness. The initial check validates only the hardware actually exercised, not every compiled GPU target, AI inference, external security audit or mainnet readiness.
 
+## RPC diagnostics
 
-## Permanent worker identities — CLI 0.8.1
+Treasury uses a single canonical block and serial contract reads, with bounded transient-read retries. Failed reads return their check stage without exposing provider credentials. Balances are never invented. A failing inspection blocks reset and public opening. Restore an HTTPS Robinhood Testnet provider in PERLA_RPC_URL; the updater can request an alternate URL privately before resetting. Wrong-chain and mismatched-contract endpoints are rejected.
 
-Use the wallet-bound Worker ID to move a rig, rather than recreating it by name. On a fresh GPU machine install the pinned 0.8.1 worker and run `perla start --worker-id YOUR_WORKER_ID --device 0`. The CLI stores a private pending credential, opens a wallet-owner approval URL, and resumes polling without printing or transferring that credential. The website requires its authenticated wallet session and explicit same-origin approval. A completed exchange rotates the hashed credential atomically, expires only unfinished old jobs, clears old hardware validations/trials, and preserves the worker row, accepted shares and reward roots. Work issuance, validation upload and share commit check the current credential at write time. Revoking access also expires outstanding reconnect approvals. Distinct simultaneous rigs should use distinct Worker IDs.
+## Backups and recovery
+
+The updater retains a private source/image backup and consistent pre-reset SQLite copy. A committed reset marker prevents accidental repeat deletion. After reset, failures retain the fresh database and new reward code for idempotent recovery; rerun the same installer. Old full-budget code must not be restored over the fresh generation. Existing encrypted data backups and health monitoring remain separate from the reward service. Offsite delivery and notification require an operator destination; they are not inferred from source code.

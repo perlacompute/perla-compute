@@ -92,3 +92,4 @@ artifacts/
 # GPU worker build artifacts and host validation output.
 *.so
 gpu-validation*.json
+/.sites-runtime-*/

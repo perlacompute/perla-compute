@@ -13,31 +13,10 @@ Shares measure valid weighted work; they are not a points balance or a promise o
 - Each won round atomically stores its winner and recipient-weight snapshot. Integer amounts use largest remainder, with deterministic address tie-breaking.
 - After UTC close plus five minutes, only earned round amounts enter a version-2 manifest. Funding and activation are separate owner actions using the existing distributor.
 
-## Legacy validation allocation
+## Fresh testnet generation
 
-The authorized cancellation is limited to epoch 20754, the reviewed owner wallet, 11 total work units and exactly 684462696783025325119780 base units. Fresh canonical Robinhood Testnet reads must confirm the matching reward token and zero root, budget and remaining allocation. RPC failure, reorg, different recipient, amount, manifest or funding metadata stops cancellation.
+The owner-authorized fresh-testnet installer removes all old local work and reward history after a consistent private backup and canonical chain inspection. Unfunded allocations are cancelled and removed, and the daily emission starts again from the reset epoch. All old worker credentials and wallet sessions are invalidated. The reset runs once; subsequent installer runs preserve fresh contributions. Blockchain history is immutable.
 
-Cancellation retains the original root, manifest and accepted share history, plus a tombstone containing the observed canonical block and reason. It sends no blockchain transaction. A cancelled allocation cannot be prepared again or activated. Other prepared legacy allocations are held from automatic funding. Already funded legacy claims remain verifiable; this release cannot revoke a contract payment.
+## Automatic funding and opening
 
-## Deployment
-
-Use the all-in-one reward-rounds updater on the website VPS. It backs up source, the web image, native verifier and consistent SQLite state; publishes worker-v0.9.0; upgrades the verifier using the existing pinned native bindings; cancels the exact unfunded validation allocation; then activates the round policy. It does not request a wallet private key or fund any epoch. The master mining switch, worker credentials, accepted work and migration plan are preserved.
-
-After the VPS update succeeds, run on each GPU host:
-
-```bash
-"$HOME/.local/bin/perla" update --release worker-v0.9.0
-"$HOME/.local/bin/perla" start --device 0
-```
-
-The existing permanent Worker ID, name and reward wallet are reused. RTX installs can refresh reviewed Python integration files in an existing verified CUDA build; unknown modified caches are rejected. No manual worker.env transfer is needed.
-
-Review and fund earned allocations separately:
-
-```bash
-cd /var/www/perla-vps
-bash scripts/perla-rewards.sh review
-bash scripts/perla-rewards.sh settle
-```
-
-The reviewer shows exact earned amounts before the dedicated testnet key is read silently. Mainnet and migration remain closed. Native proof verification does not establish hardware identity, customer AI revenue, independent audit completion or measured economic performance.
+The configured encrypted systemd signer prepares, funds and activates earned closed epochs every two minutes, after UTC close plus five minutes. An isolated 1 PERL contract round trip is excluded from mining earnings. In the owner-only test phase, real earned allocations are relayed to the owner. Public mining opens automatically after fresh GPU, sustained-work, qualifying-round, treasury and real earned-claim evidence passes. See TESTNET-OPERATIONS.md for the complete workflow.

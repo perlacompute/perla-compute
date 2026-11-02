@@ -60,3 +60,13 @@ The existing deployment has not been automatically upgraded by this source prepa
 ## Earlier validation releases
 
 See [UPDATE-0.2.3.md](UPDATE-0.2.3.md), [DOCS-UPDATE-0.2.2.md](DOCS-UPDATE-0.2.2.md) and [VERIFICATION.md](VERIFICATION.md) for historical scope. Historical token names in those records describe the version reviewed at that time.
+
+## Fresh testnet ready / worker 0.9.1
+
+- Owner-authorized one-time reset of old testnet identities, work and reward history, with private offline backup and transactional rollback.
+- New emission start with existing PERL contracts; immutable blockchain history is untouched.
+- Encrypted systemd signer and automatic earned-only daily funding, activation, recovery and owner-phase test claims.
+- Isolated 1 PERL contract smoke check excluded from mining and migration.
+- Fresh launch readiness and automatic public opening only after real GPU-to-earned-claim checks.
+- Explicit --new-worker CLI recovery without rebuilding CUDA; existing worker reuse remains supported.
+- Canonical serial treasury reads, transient-read retry and safe diagnostics; current setup/docs/status/whitepaper.

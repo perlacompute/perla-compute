@@ -1,0 +1,15 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {Check,Clock3,RefreshCw} from 'lucide-react';
+import {miningApi,utcDate} from './mining-client';
+type Report={phase:string;ready:boolean;checkedAt?:number;checks:{id:string;passed:boolean;detail:string}[];acceptedShares?:number;roundsWon?:number;testedGpuNames?:string[];automaticSettlement?:{enabled:boolean;lastChecked:number|null;error:string|null}};
+const labels:Record<string,string>={mining:'Mining service',verifier:'Proof verification',worker_release:'Public installer',gpu:'Fresh GPU validation',continuous_work:'Continuous operation',round_winner:'Qualifying reward round',treasury:'Verified funding balances',automatic_settlement:'Automatic settlement',contract_smoke:'Funding and claim check',earned_reward_claim:'Earned PERL received'};
+export function LaunchReadiness(){
+ const [data,setData]=useState<Report|null>(null),[busy,setBusy]=useState(true),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
+ useEffect(()=>{const c=new AbortController();setBusy(true);miningApi<Report>('readiness',{signal:c.signal}).then(d=>{setData(d);setError('');}).catch(()=>{if(!c.signal.aborted)setError('The launch checks could not be refreshed.');}).finally(()=>{if(!c.signal.aborted)setBusy(false);});return()=>c.abort();},[refresh]);
+ return <section className="portal-card" aria-label="Mining and reward readiness"><div className="portal-card-head"><div><span className="micro">MINING & REWARDS</span><h2>{data?.phase==='live'?'Public mining is open.':'Fresh network validation.'}</h2><p className="portal-caption">{data?.phase==='live'?'The initial GPU and earned-reward checks passed before opening.':'During validation, work is limited to the operator reward wallet. Public mining opens automatically after the GPU, funding and earned-claim checks pass.'}</p></div><button className="icon-btn" aria-label="Refresh mining and reward checks" disabled={busy} onClick={()=>setRefresh(v=>v+1)}><RefreshCw size={16}/></button></div>
+ {error&&<p className="portal-error" role="status">{error}</p>}
+ {!data&&busy?<p className="portal-caption" role="status">Checking the verifier, GPU records and testnet contracts…</p>:<div className="launch-check-grid">{data?.checks.map(c=><article key={c.id} className={c.passed?'launch-check passed':'launch-check'}><span aria-hidden="true">{c.passed?<Check size={16}/>:<Clock3 size={16}/>}</span><div><strong>{labels[c.id]||'Deployment setup'}</strong><p>{c.detail}</p></div><small>{c.passed?'Passed':'Pending'}</small></article>)}</div>}
+ {data?.checkedAt&&<p className="portal-caption">Checked {utcDate(data.checkedAt)} · {data.acceptedShares??0} accepted shares · {data.roundsWon??0} won rounds.</p>}
+ <p className="portal-caption">Earned rounds settle automatically after the daily UTC epoch closes plus five minutes. The isolated contract check returns 1 testnet PERL to the operator and does not count as mining income. GPU validation applies to the models actually tested.</p></section>;
+}

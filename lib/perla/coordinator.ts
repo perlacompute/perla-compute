@@ -1,3 +1,5 @@
+import {launchState,canMine,readiness,verifyContractSmoke} from './testnet-readiness';
+import {resolveWorkerRelease} from './worker-release-server';
 import { roundPolicy,requireRounds,activateRounds,openRewardRound,roundInfo,roundForJob,creditRoundShare,RoundError } from './reward-rounds';
 import { ROUND_POLICY } from './round-math';
 import { cancelOwnerValidationAllocation } from './reward-cancellation';
@@ -88,7 +90,7 @@ export async function miningSummary(e:MiningEnv){
   const active=await e.DB.prepare("SELECT COUNT(*) AS n FROM mining_reward_epochs WHERE state='active'").first<{n:number}>();
   const registered=await e.DB.prepare('SELECT COUNT(*) AS n FROM mining_workers WHERE revoked IS NULL').first<{n:number}>();
   const policy=await workPolicy(e),rp=await roundPolicy(e);const effective=policy.miningEnabled&&!!rp&&!rp.suspended;
-  return {storage:true,registeredWorkers:registered?.n??0,activeWorkers:w?.n??0,policy:{...policy,miningEnabled:effective},workAdmissionEnabled:policy.miningEnabled,rewardPolicy:{policy:ROUND_POLICY,configured:!!rp,ready:!!rp&&!rp.suspended,policyHash:rp?.policy_hash??null},miningEnabled:effective,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
+  return {storage:true,registeredWorkers:registered?.n??0,activeWorkers:w?.n??0,policy:{...policy,miningEnabled:effective},workAdmissionEnabled:policy.miningEnabled,launch:await launchState(e).then(s=>s?{phase:s.phase,resetAt:s.reset_at,automaticSettlement:!!s.automation_enabled}:null),rewardPolicy:{policy:ROUND_POLICY,configured:!!rp,ready:!!rp&&!rp.suspended,policyHash:rp?.policy_hash??null},miningEnabled:effective,workers:w?.n??0,acceptedWork:totals?.points??0,acceptedShares:totals?.shares??0,claimsEnabled:(active?.n??0)>0,protocol:PROTOCOL,verifier:e.PERLA_VERIFIER_URL&&e.PERLA_VERIFIER_TOKEN?'configured':'not_configured'};
 }
 export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Response>{
  try{
@@ -100,6 +102,35 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   const portal=await publicPortalResponse(r,e);if(portal)return portal;
   const db=dbFor(e);
   const setup=await onboardingRequest(r,{db,now,path,body:()=>body(r),origin:()=>originCheck(r),account:()=>account(r,db,now),worker:()=>worker(r,db,now),operator:()=>operator(r,e),health:()=>verifierCall(e,'/health'),throttle:(key,max,window)=>throttle(db,key,max,now,window),fail});if(setup)return setup;
+  if(path==='readiness'&&r.method==='GET'||path==='operator/testnet/readiness'&&r.method==='GET'||path==='operator/testnet/live'&&r.method==='POST'){
+   const privileged=path.startsWith('operator/');if(privileged)await operator(r,e);else await throttle(db,'public-readiness',20,now);
+   let nativeReady=false;try{const h=await verifierCall(e,'/health');nativeReady=h.ready===true&&h.round_target_policy===ROUND_POLICY;}catch{}
+   const release=await resolveWorkerRelease();
+   const state=await readiness(e,{nativeReady,releaseReady:release.state==='available'&&release.tag==='worker-v0.9.1'&&release.integrityVerified===true},now);
+   if(r.method==='POST'){
+    if(!state.ready)return json({error:'The fresh GPU-to-earned-claim checks are incomplete.',...state},409);
+    const launch=await launchState(e);await verifyContractSmoke(e,{epoch:launch!.smoke_epoch!,fundingTransaction:launch!.smoke_funding_tx as `0x${string}`,claimTransaction:launch!.smoke_claim_tx as `0x${string}`});
+    await db.prepare("UPDATE mining_testnet_state SET phase='live',launched_at=? WHERE id=1 AND phase='testing'").bind(now).run();
+    return json({...state,phase:'live',publicWorkAdmission:true});
+   }
+   return json(state);
+  }
+  if(path.startsWith('operator/testnet/')){
+   await operator(r,e);const state=await launchState(e);if(!state)fail(409,'Run the fresh-testnet reset before enabling automation.');
+   if(path==='operator/testnet/state'&&r.method==='GET')return json(state);
+   if(path==='operator/testnet/testing-claims'&&r.method==='GET'){
+    const rows=state!.phase==='testing'?await db.prepare("SELECT manifest FROM mining_reward_epochs WHERE state='active' ORDER BY epoch DESC LIMIT 10").all<{manifest:string}>():{results:[]};
+    return json({phase:state!.phase,items:rows.results.map(x=>JSON.parse(x.manifest))});
+   }
+   if(path==='operator/testnet/automation'&&r.method==='POST'){
+    const b=await body(r);if(b.enabled!==true||![null,'settlement_check_failed'].includes(b.error as null|string))fail(400,'Invalid settlement heartbeat.');
+    await db.prepare('UPDATE mining_testnet_state SET automation_enabled=1,automation_checked=?,automation_error=? WHERE id=1').bind(now,b.error).run();return json({recorded:true});
+   }
+   if(path==='operator/testnet/smoke'&&r.method==='POST'){
+    const b=await body(r);if(typeof b.epoch!=='string'||!/^\d{1,50}$/.test(b.epoch)||![b.fundingTransaction,b.claimTransaction].every(x=>typeof x==='string'&&/^0x[0-9a-fA-F]{64}$/.test(x)))fail(400,'Invalid smoke receipt.');
+    return json(await verifyContractSmoke(e,b as unknown as {epoch:string;fundingTransaction:`0x${string}`;claimTransaction:`0x${string}`}));
+   }
+  }
   if(path==='rounds'&&r.method==='GET'){const rows=await db.prepare('SELECT id,epoch,state,difficulty_weight,target_bits,reward,opened,closed,winner_share FROM mining_reward_rounds ORDER BY rowid DESC LIMIT 20').all();return json({items:rows.results,policy:ROUND_POLICY,chainId:CHAIN_ID});}
   if(path==='operator/reward-rounds/activate'&&r.method==='POST'){
    await operator(r,e);const health=await verifierCall(e,'/health');if(health.round_target_policy!==ROUND_POLICY)fail(503,'Upgrade the native verifier before activating round rewards.');
@@ -183,7 +214,8 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   }
   if(path==='work'&&r.method==='GET'){
    const w=await worker(r,db,now);await throttle(db,`work:${w.id}`,120,now);
-   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.0 for round rewards.');
+   if(!await canMine(e,w.address))fail(503,'Fresh testnet validation is in progress. Public work opens after the complete GPU and reward checks pass.');
+   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.1 for round rewards.');
    const policy=await workPolicy(e);if(!policy.miningEnabled)fail(503,'Mining admission is paused. Your worker identity is retained.');
    await requireRounds(e);const round=await openRewardRound(e,now);
    if(!await db.prepare('SELECT address FROM mining_round_epoch_recipients WHERE epoch=? AND address=?').bind(round.epoch,w.address).first()&&(await db.prepare('SELECT COUNT(*) n FROM mining_round_epoch_recipients WHERE epoch=?').bind(round.epoch).first<{n:number}>())!.n>=5000)fail(503,'The epoch recipient limit is reached. New reward wallets can request work next UTC epoch.');
@@ -206,7 +238,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   }
   if(path==='shares'&&r.method==='POST'){
    const w=await worker(r,db,now);await throttle(db,`share:${w.id}`,30,now);
-   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.0.');
+   if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.1.');
    await requireRounds(e);const admission=(await workPolicy(e)).miningEnabled;if(!admission)fail(503,'Paid round work is paused.');
    const b=await body(r,Math.ceil(MAX_PROOF_BYTES*4/3)+4096);
    if(typeof b.jobId!=='string'||typeof b.plainProof!=='string')fail(400,'A job and native plain proof are required.');

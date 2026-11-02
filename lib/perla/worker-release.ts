@@ -1,8 +1,8 @@
 export const workerRelease = {
-  repository: 'perlacompute/perla-compute', version: '0.9.0', tag: 'worker-v0.9.0',
+  repository: 'perlacompute/perla-compute', version: '0.9.1', tag: 'worker-v0.9.1',
   protocol: 'perla-pearl-plain-v4', chainId: 46630,
-  page: 'https://github.com/perlacompute/perla-compute/releases/tag/worker-v0.9.0',
-  base: 'https://github.com/perlacompute/perla-compute/releases/download/worker-v0.9.0/',
+  page: 'https://github.com/perlacompute/perla-compute/releases/tag/worker-v0.9.1',
+  base: 'https://github.com/perlacompute/perla-compute/releases/download/worker-v0.9.1/',
   upstreamCommit: '82e6eee7076aafe10123e08db78f100d270c0582',
   assets: ['install.sh', 'install.py', 'worker-release.json', 'perla-rtx-worker.tar.gz', 'perla-worker.tar.gz', 'SHA256SUMS'],
 } as const;
@@ -25,10 +25,10 @@ export function workerCommands(profile: WorkerProfile, device = 0) {
     monitor: `${cli} status\n${cli} logs --tail 100`, stop: `${cli} stop`, version: `${cli} version`, updateHelp: `${cli} update --help`,
   };
 }
-export function namedWorkerCommand(wallet: string, name: string, device = 0) {
+export function namedWorkerCommand(wallet: string, name: string, device = 0, fresh = false) {
   if (wallet.length !== 42 || !/^0x[0-9a-fA-F]{40}$/.test(wallet) || /^0x0{40}$/i.test(wallet) || name.length > 48 || !/^[A-Za-z0-9]/.test(name) || /[^A-Za-z0-9._-]/.test(name)) throw new Error('Enter a public EVM address and a valid worker name');
   workerCommands('rtx', device);
-  return `${cli} start --wallet ${wallet.toLowerCase()} --worker ${name} --device ${device}`;
+  return `${cli} start${fresh ? ' --new-worker' : ''} --wallet ${wallet.toLowerCase()} --worker ${name} --device ${device}`;
 }
 export function existingWorkerCommand(id: string, device = 0) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)) throw new Error('Enter the full permanent Worker ID');

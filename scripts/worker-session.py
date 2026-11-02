@@ -12,7 +12,7 @@ def call(path,payload=None,token=None,endpoint=ENDPOINT):
  u=urllib.parse.urlsplit(endpoint)
  if u.scheme!='https' or u.username or u.password or not u.hostname or u.query or u.fragment or u.path.rstrip('/'):
   raise RuntimeError('Use an HTTPS coordinator origin.')
- headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.9.0'}
+ headers={'content-type':'application/json','User-Agent':'Perla-Worker/0.9.1'}
  if token:headers['authorization']='Bearer '+token
  request=urllib.request.Request(endpoint.rstrip('/')+'/api/mining/'+path,data=None if payload is None else json.dumps(payload).encode(),headers=headers)
  try:
@@ -109,20 +109,29 @@ def reconnect(root,args,cli):
 
 def connect(root,args,cli):
  """Payout routing only. Never requests a wallet key, signature, or browser login."""
- if reconnect(root,args,cli):return
+ fresh=getattr(args,'new_worker',False)
+ if fresh and (getattr(args,'worker_id',None) or not re.fullmatch(r'0x[0-9a-fA-F]{40}',getattr(args,'wallet',None) or '') or int(args.wallet[2:],16)==0):raise RuntimeError('--new-worker requires your public --wallet and cannot be combined with --worker-id.')
+ if fresh and getattr(args,'worker',None) and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,47}',args.worker):raise RuntimeError('Enter a valid new worker name before replacing a connection.')
+ if fresh and getattr(cli,'shutil',None) and cli.shutil.which('docker'):
+  _,container=cli.owned_container(root,cli.command)
+  if container and container.get('State',{}).get('Running'):raise RuntimeError('Stop the running Docker worker before replacing its connection.')
+ if not fresh and reconnect(root,args,cli):return
  config_path=root/'config/worker.env'
  wallet=getattr(args,'wallet',None);name=getattr(args,'worker',None)
  endpoint=getattr(args,'endpoint',None) or ENDPOINT
- if config_path.exists():
+ if config_path.exists() and not fresh:
   config=cli.configuration(root)
   if getattr(args,'endpoint',None) and endpoint!=config['PERLA_ENDPOINT']:
    raise RuntimeError('An existing worker uses another coordinator. Use a separate --root installation.')
+  try:current=call('worker/status',token=config['PERLA_WORKER_TOKEN'],endpoint=config['PERLA_ENDPOINT'])
+  except CoordinatorError as error:
+   if error.status==401:raise RuntimeError('This saved worker is no longer registered. After the authorized network reset, run perla start --new-worker --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 once. The CUDA build is retained. If the ID still exists, use owner-approved --worker-id reconnect instead.') from None
+   raise
   if wallet or name:
-   current=call('worker/status',token=config['PERLA_WORKER_TOKEN'],endpoint=config['PERLA_ENDPOINT'])
    if (wallet and wallet.lower()!=current.get('address')) or (name and name!=current.get('name')):
     raise RuntimeError('Wallet or worker name differs from the saved connection. Existing payout settings were retained. Use a separate --root installation for another rig.')
   return
- pending_path=root/'config/pending-connection.json'
+ pending_path=root/('config/pending-new-connection.json' if fresh else 'config/pending-connection.json')
  pending=json.loads(cli.regular(pending_path,4000)) if pending_path.exists() else None
  if pending:
   if (wallet and wallet.lower()!=pending['address']) or (name and name!=pending['name']) or endpoint!=pending['endpoint']:
@@ -146,6 +155,10 @@ def connect(root,args,cli):
  cli.atomic(config_path,('PERLA_ENDPOINT='+endpoint+'\nPERLA_WORKER_TOKEN='+pending['token']+'\n').encode())
  cli.atomic(root/'config/connection.json',(json.dumps({k:result[k] for k in ['id','address','name','endpoint']})+'\n').encode())
  pending_path.unlink()
+ if fresh:
+  for old_name in ['pending-reconnect.json','pending-connection.json']:
+   old=root/'config'/old_name
+   if old.exists():cli.regular(old,4000);old.unlink()
  print('Worker: '+name+'\nWorker ID: '+result['id']+'\nReward wallet: '+pending['address']+'\nSave this permanent ID for a future machine move. Reuse it with --worker-id and owner approval.\nConnection saved privately. View this wallet in the Perla dashboard.',flush=True)
 
 def dispatch(root,installed,args,cli):

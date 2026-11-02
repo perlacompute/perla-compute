@@ -23,7 +23,7 @@ UPSTREAM = '82e6eee7076aafe10123e08db78f100d270c0582'
 PROTOCOL = 'perla-pearl-plain-v4'
 RELEASE = 'worker-v0.5.0'  # Pinned GPU/proof core and compatible native build cache.
 SUPPORTED_INSTALL_RELEASES = (RELEASE, 'worker-v0.6.0', 'worker-v0.7.0',
-                              'worker-v0.8.0', 'worker-v0.8.1', 'worker-v0.8.2', 'worker-v0.9.0')
+                              'worker-v0.8.0', 'worker-v0.8.1', 'worker-v0.8.2', 'worker-v0.9.0', 'worker-v0.9.1')
 RUST = '1.99.1'
 VERSION = '0.1.0'
 # Only the reviewed 0.8.1 Python mining loop can be replaced in-place.

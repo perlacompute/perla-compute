@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "repository": "perlacompute/perla-compute",
-  "tag": "worker-v0.9.0",
-  "version": "0.9.0",
+  "tag": "worker-v0.9.1",
+  "version": "0.9.1",
   "chainId": 46630,
   "protocol": "perla-pearl-plain-v4",
   "upstreamCommit": "82e6eee7076aafe10123e08db78f100d270c0582",
@@ -13,7 +13,7 @@
     "rtx": {
       "archive": "perla-rtx-worker.tar.gz",
       "root": "perla-rtx-worker",
-      "image": "perla-rtx-worker:0.9.0",
+      "image": "perla-rtx-worker:0.9.1",
       "cudaTargets": [
         86,
         89,

@@ -1,121 +1,69 @@
 # Perla Compute
 
-GPU mining infrastructure for verifiable compute on Robinhood Chain. Perla connects native proof verification, a wallet-bound contribution ledger, and funded onchain reward epochs.
+Verifiable GPU mining, qualifying reward rounds and funded PERL settlement on Robinhood Testnet.
 
-[Website](https://perlacompute.xyz) · [Docs](https://perlacompute.xyz/docs) · [Whitepaper](https://perlacompute.xyz/whitepaper) · [Project status](https://perlacompute.xyz/status)
+[Website](https://perlacompute.xyz) · [Miner setup](https://perlacompute.xyz/platform/setup) · [Docs](https://perlacompute.xyz/docs) · [Network status](https://perlacompute.xyz/status) · [Worker releases](https://github.com/perlacompute/perla-compute/releases)
 
-## Current state
+## GPU workers
 
-This repository contains the **0.5.0 application with worker 0.9.0 and round-reward source**. Mainnet remains on hold.
+Use the website to generate the complete pinned installer and start command. Worker **0.9.1** supports Linux RTX 30 / 40 / 50 compilation targets and a separate H100/H200 integration. Native CUDA runs without Docker when the GPU host is itself a container. Actual GPU validation applies only to the models observed on Network status.
 
-| Component | State and scope |
-| --- | --- |
-| Network | Robinhood Testnet, chain ID 46630 |
-| Testnet token | PERL, fixed 1,000,000,000 supply, 18 decimals |
-| Contracts | New PERL token and matching distributor reported deployed on 27 October 2026 |
-| Website integration | Prepared connector available; completion requires the VPS connection report |
-| Mining admission | Operator controlled; read the live status endpoint |
-| Physical GPU validation | RTX 4090 validation and accepted legacy work reported by the operator; new round targets still need deployment validation |
-| Public reward activation | No completed funded mining epoch or live claim reported in this release record |
-| Mainnet | On hold; published 70M migration / 130M mining plan, 100:7 ratio and 1M global daily migration output cap; no active bridge or funded mainnet reserve |
+```bash
+curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
+  'https://github.com/perlacompute/perla-compute/releases/download/worker-v0.9.1/install.sh' -o install-perla.sh
+bash install-perla.sh --profile rtx
+"$HOME/.local/bin/perla" start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0
+```
 
-The PERL token is `0xfeAB80c7665973D91F3f3FAB36CBB3183C8dC4F8`; its distributor is `0xa35C0Cb08279998c2948Ac340ef056d07bDC5547`. See [the dated deployment record](deployments/robinhood-testnet.json) and [PERL integration notes](docs/PERL-TESTNET.md). The earlier tPERLA contracts remain separate historical deployments.
+GPU numbering begins at zero. A single-GPU machine uses `--device 0`. Mining continues by default; `--shares 1` is only a single-share diagnostic. Credentials and GPU reports are provisioned automatically; there is no manual worker.env transfer and no wallet private key on the GPU host.
 
-These are source and dated operator records. Check the live status page and current operator evidence before treating a feature as available. Passing a software test does not establish physical GPU performance or a completed public-chain mining reward.
+The CLI retains the permanent Worker ID for normal restarts. Move an existing new-generation worker with `perla start --worker-id YOUR_ID --device 0`, then approve the replacement in the owner wallet browser. After the authorized fresh-network reset, update to 0.9.1 and use `start --new-worker --wallet ADDRESS --worker NAME --device 0` once. This deliberately replaces the erased connection and retains the verified CUDA build. Deleted IDs cannot reconnect.
 
-## How it works
+## Work and rewards
 
-1. A wallet signs in and creates a scoped, revocable worker credential.
-2. The coordinator assigns a short-lived challenge bound to the worker, recipient and network.
-3. A worker submits its native proof. Accepted work receives a contribution record; duplicate credit is rejected.
-4. The same proof is checked against a harder round target. A qualifying winner unlocks one reward, split through the recent weighted PPLNS share window. Ordinary shares alone unlock no PERL.
-5. After a UTC epoch closes, the operator publishes a deterministic allocation, funds its Merkle root with existing tokens, and separately activates the matching epoch.
-6. A valid claim pays the recipient committed in that funded allocation.
+A normal accepted share measures exact difficulty-weighted work and unlocks no token by itself. A proof must also meet a harder round target. Each winning round unlocks floor(the UTC daily cap / 446), split across the latest weighted PPLNS window. At most 446 rounds can earn daily; unused capacity remains in treasury with no rollover. Initial difficulty and retarget settings are published; they are not measured GPU earning rates.
 
-Perla uses Robinhood for settlement. Proof submission does not mint new ERC-20 tokens. The reward contract enforces its funded allocation; the operator controls native verification, the offchain ledger and root publication. Read [the architecture and trust model](ARCHITECTURE.md).
+Earned daily allocations settle after UTC close plus five minutes. The owner-authorized testnet service prepares, verifies, funds and activates exact manifests automatically. Its dedicated signer is encrypted as a systemd credential on the website VPS. Funding and claim state are checked against canonical testnet contract reads; unavailable RPC data is never treated as a payment.
 
-Read [the complete round-reward rules and cutover](docs/REWARD-ROUNDS.md). The daily curve is a cap, each won round unlocks floor(cap / 446), and unused capacity has no rollover.
+The operator-only validation phase performs an isolated 1 PERL contract round trip, then a real GPU-to-earned-claim lifecycle. The isolated transaction creates no mining income or migration entitlement. Public mining opens automatically only after the fresh checks at `/status` pass.
 
-## Software included
+## Network and contracts
 
-- Wallet authentication, worker credentials and persistent SQLite accounting.
-- Native certificate verification through a pinned Rust/PyO3 binding.
-- Proof Explorer, Reward Center, installation wizard and token treasury reads.
-- Deterministic reward allocation, funding checks and claim tracking.
-- Work policies, worker diagnostics, encrypted backups and restore drills.
-- Separate RTX matrix-mining and Hopper vLLM worker paths.
+- Robinhood Testnet: **46630**.
+- Fixed testnet supply: **1,000,000,000 PERL**, 18 decimals.
+- Token: `0xfeAB80c7665973D91F3f3FAB36CBB3183C8dC4F8`.
+- Reward distributor: `0xa35C0Cb08279998c2948Ac340ef056d07bDC5547`.
+- Mainnet and bridge remain closed. The published mainnet plan reserves 70M for eligible testnet migration and 130M for future mining; 800M remains unassigned. A transferred testnet token balance alone does not establish migration eligibility.
 
-The RTX validation worker targets Linux NVIDIA RTX 30 (`sm86`), RTX 40 (`sm89`) and RTX 50 (`sm120`). Compilation targets are not hardware certification. Its standalone INT8 matrix work does not require an AI model checkpoint. The separate H100/H200 (`sm90`) vLLM adapter serves models, subject to its configuration and memory needs. See [the RTX guide](services/rtx-worker/README.md) and [validation scope](docs/validation-0.4.0-rc1.md).
+RTX currently performs standalone matrix mining and native proof production. It does not serve paid customer AI inference. The separate Hopper model-serving integration has a different execution path. The coordinator and native verifier remain operator-run offchain services; the distributor enforces funded immutable Merkle roots. There is no new Perla chain or EVM-native proof verifier in this release.
 
-## Run locally
+## Operator runbook
 
-Use Node.js **24.13 or newer within the Node 24 release line**, npm, Python 3 and GNU tar.
+See [TESTNET-OPERATIONS.md](docs/TESTNET-OPERATIONS.md), [REWARD-ROUNDS.md](docs/REWARD-ROUNDS.md) and [portal-api.md](docs/portal-api.md).
+
+```bash
+cd /var/www/perla-vps
+bash scripts/perla-rewards.sh health
+systemctl status perla-rewards-auto.timer perla-rewards-auto.service
+```
+
+The one-time fresh-testnet installer takes a private offline backup, removes the owner-authorized old mining dataset and starts a new emission epoch with the existing contracts. Rerunning that installer never wipes new history. On a future VPS, configure the encrypted signer again; its ciphertext alone is tied to the original host.
+
+## Development and validation
+
+Node.js 24 and npm are required. The app uses Next.js, TypeScript and SQLite.
 
 ```bash
 npm ci
-cp .env.example .env
-npm run dev
-```
-
-Open `http://127.0.0.1:3000`. The paused application can be browsed without a wallet private key or an inference provider. Configure production secrets locally, using the blank environment example.
-
-## Validation
-
-```bash
-npm run check
-npm run package:mining
 npm run build
-npm run typecheck
-node scripts/checks/vps-http.test.mjs
+npm run check:fresh-testnet
+npm run check:round-rewards
+npm run check:reward-settlement
+python3 -m unittest discover -s tests/worker_installer
 ```
 
-Software checks use isolated SQLite databases and a local EVM. They do not broadcast public-chain transactions. Native integration tests require the pinned upstream binding and test configuration described in [ARCHITECTURE.md](ARCHITECTURE.md).
+SQLite and local EVM checks cover one-time reset, rollback, round accounting, funding, actual contract claims, replay rejection, interrupted transaction recovery and readiness. GPU, verifier and GitHub doubles are identified by each test. A production build or local EVM pass does not establish a physical GPU benchmark, public-chain test result or independent external audit.
 
-GitHub Actions source is included for software checks, RTX compilation/CPU protocol checks and draft release artifacts. A successful GitHub run can be claimed only after the workflow executes on the actual repository. The workflows contain no wallet key, public-chain deployment, epoch funding or VPS deployment step.
+## License and provenance
 
-## Operate an existing installation
-
-- [VPS deployment](DEPLOY-VPS.md): Docker, storage, Nginx and HTTPS.
-- [Testnet operations](docs/TESTNET-OPERATIONS.md): work policy, accounting and backups.
-- [Current PERL deployment](docs/PERL-TESTNET.md): active contract pair and migration checks.
-- [Setup tools](docs/setup-tools.md): current tooling and the retired legacy tPERLA installer.
-- [Portal APIs](docs/portal-api.md): accepted-work and reward read endpoints.
-
-The source archive is not an in-place VPS updater. Preserve the runtime environment, database volume, worker credentials, verifier configuration and deployment journals when upgrading. Admission, actual GPU validation, epoch funding and claims are separate operational steps.
-
-## Repository map
-
-| Path | Purpose |
-| --- | --- |
-| `app/`, `components/` | Website, documentation and dashboards |
-| `lib/perla/` | Coordinator, proof envelopes, work policy and reward accounting |
-| `lib/vps/`, `drizzle/` | SQLite runtime and migrations |
-| `services/` | GPU workers, native verifier and upstream integration |
-| `contracts/`, `deployments/` | Contract source and dated public deployment records |
-| `scripts/`, `tools/` | Packaging, checks and operator utilities |
-
-## Contribute and report issues
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md) and [ROADMAP.md](ROADMAP.md). Use a reproducible, sanitized report for bugs. Security reporting should use a private channel when the repository owner has enabled one; no external audit or bounty is claimed.
-
-## Attribution and license
-
-Perla is an independent project. [Credits and upstream provenance](docs/UPSTREAM.md) identify the original components and their pinned revision. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and the notices retained in the worker packages.
-
-Perla-authored material uses the [MIT License](LICENSE). Third-party components retain their own licenses. Mathematical proof acceptance does not attest GPU ownership, customer demand or the correctness of an entire AI answer.
-
-Maintainers preparing the first repository can follow [the GitHub publication guide](docs/publishing.md).
-
-## Reward and migration plan
-
-The fixed mainnet supply plan is 1B PERL. Mining allocations total 200M: up to 70M for eligible testnet reward migration, and 130M for mining after mainnet. The planned conversion is 100 eligible testnet PERL to 7 mainnet PERL. Migration output is planned to be capped globally at 1M mainnet PERL per UTC day. The other 800M has no allocation assigned in this plan. See [Docs](https://perlacompute.xyz/docs#migration) and [Bridge](https://perlacompute.xyz/bridge).
-
-Bridge remains coming soon; this release does not deploy/fund mainnet contracts or activate migration. A conversion preview is arithmetic, not an eligibility check. Owner balances and arbitrary testnet transfers do not establish migration rights. The existing testnet distributor enforces funded testnet allocations, not the planned migration or its output limit.
-
-## Worker connection (0.7.0)
-
-Install the pinned GitHub CLI, then run `perla start --wallet YOUR_PUBLIC_0X_ADDRESS --worker rig01 --device 0 --shares 1`. Miner Setup generates the exact install-and-start command. Worker names identify rigs; addresses route contribution rewards. A supplied address is not proof of wallet ownership. No browser login is required for this miner connection; dashboard management and claims still require wallet authorization.
-
-Runtime preparation, actual GPU self-test and authenticated report upload are automatic. An RTX GPU container uses native CUDA when Docker is unavailable; the existing verified 4090 runtime can be reused. A retry after a lost registration response reuses the same private credential rather than duplicating the worker. Saved payout settings cannot be changed by passing different flags. Use a separate `--root` directory for another rig.
-
-This validation release stops after one accepted share by default. Public admission remains paused until the project enables a validated mining policy. Operators can review uploaded reports with `bash scripts/perla-trial.sh review` and admit a one-share trial with `bash scripts/perla-trial.sh start [WORKER_ID]`. No miner-to-VPS file transfer is required. Reward funding and contracts remain separate.
+Perla application code is MIT licensed. Retain the upstream notices included with the native matrix/proof integrations; see the relevant `NOTICE.md` files. Internal wire identifiers and upstream source references are retained for compatibility and provenance.

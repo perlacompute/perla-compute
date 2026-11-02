@@ -41,3 +41,14 @@ The public `status` route now derives `claimsEnabled` from activated allocation 
 ## Worker identity and machine replacement
 
 A Worker ID is permanent, while a machine credential can be replaced. POST `worker/reconnect/start` uses a new client-generated credential plus a target Worker ID and confirmation code. POST `worker/reconnect/info` and `worker/reconnect/approve` require the same-origin authenticated owner-wallet session. POST `worker/reconnect/exchange` uses the new machine credential, rotates it atomically into the existing worker, expires unfinished old jobs, and clears old validation/trial state. Retries are idempotent for the same request. No private token is returned by these endpoints. The worker ID, wallet, name, creation time and accepted work are retained. Revocation invalidates unconsumed approvals. Code approval expires after 10 minutes.
+
+## Fresh generation and launch readiness
+
+- `GET /api/mining/readiness`: public, no-store launch evidence and pending checks. It never creates contributions or promotes the deployment.
+- `GET /api/mining/operator/testnet/state`: authenticated fresh-generation state.
+- `POST /api/mining/operator/testnet/automation`: authenticated scheduler heartbeat; failures never become successful checks.
+- `POST /api/mining/operator/testnet/smoke`: verifies the isolated 1 PERL funding/claim receipts independently against canonical chain state.
+- `GET /api/mining/operator/testnet/testing-claims`: real funded daily manifests for the owner-only test phase. The signer relays only its own committed recipient allocation.
+- `POST /api/mining/operator/testnet/live`: opens public work only after fresh GPU, sustained-work, qualifying-round, treasury, scheduler and real earned-claim evidence passes. The automatic service invokes it when ready.
+
+The fresh reset itself is an offline operator operation with stopped web writers and a consistent backup; it is deliberately unavailable as a public or browser API. It clears old worker/auth/work/reward rows once and retains only schema and re-pinned configuration. Old worker credentials return 401. `--new-worker` replaces a GPU host connection after an explicit CLI request without deleting its verified CUDA build.
