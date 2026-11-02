@@ -3,7 +3,7 @@
 import argparse,fcntl,hashlib,io,json,os,platform,re,shlex,shutil,stat,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 REPO='perlacompute/perla-compute'
-DEFAULT_RELEASE='worker-v0.8.1'
+DEFAULT_RELEASE='worker-v0.8.2'
 SCHEMA=1
 class WorkerError(Exception):pass
 
@@ -257,7 +257,7 @@ def runtime(root,installed,args,runner=command):
   cache=directory(root/'cache/huggingface');base += ['--shm-size','8g','--publish','127.0.0.1:8000:8000','--volume',str(cache)+':/root/.cache/huggingface',image,args.model,'--host','0.0.0.0','--port','8000','--tensor-parallel-size',str(args.tensor_parallel_size)]
  runner(base,visible=True)
  print('Worker container started. Inspect perla status and perla logs for its actual result.')
- if profile=='rtx':print('The worker repeats GPU checks before requesting jobs and stops after '+str(args.shares)+' accepted share(s). Paused admission or a failed check can stop it earlier.')
+ if profile=='rtx':print(('Continuous mining. Use perla stop for this Docker worker.' if args.shares==0 else 'Test limit: '+str(args.shares)+' accepted share(s).')+' Paused admission or a failed check can stop it earlier.')
 
 def parser():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',type=Path,default=Path(os.environ.get('XDG_DATA_HOME',str(Path.home()/'.local/share')))/'perla')
@@ -268,7 +268,7 @@ def parser():
  for cmd in ['doctor','build','selftest','start']:
   s=sub.add_parser(cmd);s.add_argument('--device',type=int,default=0)
   if cmd=='start':
-   s.add_argument('--shares',type=int,default=1,help='Accepted shares before stopping; this validation release defaults to 1')
+   s.add_argument('--shares',type=int,default=0,help='Accepted-share limit; 0 runs continuously (default), 1 runs a single-share test')
    s.add_argument('--interval',type=float,default=10);s.add_argument('--model');s.add_argument('--tensor-parallel-size',type=int,default=2)
    s.add_argument('--wallet',help='Public EVM reward address; never a private key');s.add_argument('--worker',help='Rig name, for example rig01');s.add_argument('--endpoint',help='HTTPS coordinator origin')
    s.add_argument('--worker-id',help='Reuse a permanent Worker ID on a new machine; requires owner-wallet approval')
@@ -279,7 +279,7 @@ def parser():
 
 def main(argv=None):
  p=parser();args=p.parse_args(argv)
- if getattr(args,'device',0)<0 or getattr(args,'shares',1)<1 or not 5<=getattr(args,'interval',10)<=3600 or not 1<=getattr(args,'tensor_parallel_size',2)<=16 or not 1<=getattr(args,'tail',100)<=5000:p.error('Device, share count, interval, tensor parallel size or log bound is invalid.')
+ if getattr(args,'device',0)<0 or not 0<=getattr(args,'shares',0)<=100000 or not 5<=getattr(args,'interval',10)<=3600 or not 1<=getattr(args,'tensor_parallel_size',2)<=16 or not 1<=getattr(args,'tail',100)<=5000:p.error('Device, share count, interval, tensor parallel size or log bound is invalid.')
  root=directory(getattr(args,'install_root',None) or args.root)
  if (root/'worker.lock').is_symlink():raise WorkerError('Use a regular installation lock file.')
  with (root/'worker.lock').open('a') as lock:

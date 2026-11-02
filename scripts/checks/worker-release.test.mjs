@@ -52,14 +52,14 @@ try {
  });
  await test('device injection and invalid profiles are rejected',()=>{for(const d of [-1,1.5,256,'0;id'])assert.throws(()=>workerCommands('rtx',d));assert.throws(()=>workerCommands('other'));});
  await test('named worker commands reject shell input and preserve payout routing',()=>{
-  const wallet='0x'+'1'.repeat(40);const cmd=namedWorkerCommand(wallet,'home-4090',0);assert(cmd.includes('--wallet '+wallet+' --worker home-4090'));assert(!cmd.includes(' login'));
+  const wallet='0x'+'1'.repeat(40);const cmd=namedWorkerCommand(wallet,'home-4090',0);assert(cmd.includes('--wallet '+wallet+' --worker home-4090'));assert(!cmd.includes(' login'));assert(!cmd.includes('--shares'));
   assert.equal(spawnSync('bash',['-n'],{input:cmd,encoding:'utf8'}).status,0);
   for(const name of ['x;id','$(id)','--flag','rig\n','..','a'.repeat(49)])assert.throws(()=>namedWorkerCommand(wallet,name));
   for(const address of ['0x'+'0'.repeat(40),wallet+'\n',wallet+';id'])assert.throws(()=>namedWorkerCommand(address,'rig01'));
  });
  await test('existing-ID commands preserve the UUID and reject shell or malformed input',()=>{
   const id='8683902e-dc8c-40ba-9eb3-5ac2293e243b',command=existingWorkerCommand(id,0);
-  assert(command.includes('--worker-id '+id+' --device 0'));assert(!command.includes('--wallet'));assert.equal(spawnSync('bash',['-n'],{input:command,encoding:'utf8'}).status,0);
+  assert(command.includes('--worker-id '+id+' --device 0'));assert(!command.includes('--wallet'));assert(!command.includes('--shares'));assert.equal(spawnSync('bash',['-n'],{input:command,encoding:'utf8'}).status,0);
   for(const value of [id+';id',id+'\n','testing','--flag','0'.repeat(36)])assert.throws(()=>existingWorkerCommand(value,0));
  });
  console.log(`${passed} worker-release checks passed.`);

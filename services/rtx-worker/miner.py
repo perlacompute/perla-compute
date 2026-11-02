@@ -114,6 +114,8 @@ def choose_proof(attempt, transcripts):
 def run_worker(args, client_factory=PerlaClient, backend_factory=CudaBackend):
     client = client_factory(os.environ.get("PERLA_ENDPOINT", ""), os.environ.get("PERLA_WORKER_TOKEN", ""))
     emit("workload", mode="standalone-matrix-mining", aiInference=False, version=VERSION)
+    emit("mining_session", mode="continuous" if args.shares == 0 else "bounded-test",
+         shareLimit=args.shares or None, device=args.device)
     # A new container must demonstrate actual GPU correctness, never trust an
     # editable cached report or a reported architecture alone.
     with backend_factory(args.device, args.k) as backend:
@@ -122,10 +124,13 @@ def run_worker(args, client_factory=PerlaClient, backend_factory=CudaBackend):
         client.architecture = backend.info.get("computeCapability")
         accepted, attempts, no_hits = 0, 0, 0
         job, last_poll = None, 0.0
-        while accepted < args.shares and not STOP:
+        while (args.shares == 0 or accepted < args.shares) and not STOP:
             if job is None or time.time() >= job["expires"] - 5 or time.monotonic() - last_poll >= 15:
                 refreshed = client.call("work")
                 header = validate_job(refreshed, time.time(), client.endpoint)
+                if job is None or refreshed["id"] != job["id"]:
+                    emit("job_assigned", job=refreshed["id"], epoch=refreshed.get("epoch"),
+                         expires=refreshed["expires"], rewardCreated=False)
                 job, last_poll = refreshed, time.monotonic()
             if STOP:
                 break
@@ -155,10 +160,12 @@ def run_worker(args, client_factory=PerlaClient, backend_factory=CudaBackend):
                 gpuComputeMs=round(ms, 3), attempts=attempts,
                 explorer=client.endpoint + "/explorer/" + receipt["id"])
             job = None
-            if accepted < args.shares:
+            if args.shares == 0 or accepted < args.shares:
                 deadline = time.monotonic() + args.interval
                 while not STOP and time.monotonic() < deadline:
                     time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+    emit("mining_stopped", reason="interrupted" if STOP else "share_limit_reached",
+         accepted=accepted, shareLimit=args.shares or None)
     return accepted
 
 
@@ -167,11 +174,11 @@ def main(argv=None):
     parser.add_argument("command", choices=("selftest", "run"))
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--k", type=int, choices=(2048, 4096), default=2048)
-    parser.add_argument("--shares", type=int, default=1, help="Accepted shares before stopping; default 1 for controlled validation")
+    parser.add_argument("--shares", type=int, default=0, help="Accepted-share limit; 0 runs continuously (default), 1 runs a single-share test")
     parser.add_argument("--interval", type=float, default=10, help="Seconds between successful jobs; minimum 5")
     args = parser.parse_args(argv)
-    if not 0 <= args.device < 64 or not 1 <= args.shares <= 100000 or not np.isfinite(args.interval) or not 5 <= args.interval <= 3600:
-        parser.error("Use GPU index 0..63, shares 1..100000 and interval 5..3600 seconds")
+    if not 0 <= args.device < 64 or not 0 <= args.shares <= 100000 or not np.isfinite(args.interval) or not 5 <= args.interval <= 3600:
+        parser.error("Use GPU index 0..63, shares 0..100000 (0 = continuous) and interval 5..3600 seconds")
     def stop(*_):
         global STOP
         STOP = True

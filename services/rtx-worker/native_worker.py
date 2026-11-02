@@ -23,9 +23,12 @@ UPSTREAM = '82e6eee7076aafe10123e08db78f100d270c0582'
 PROTOCOL = 'perla-pearl-plain-v4'
 RELEASE = 'worker-v0.5.0'  # Pinned GPU/proof core and compatible native build cache.
 SUPPORTED_INSTALL_RELEASES = (RELEASE, 'worker-v0.6.0', 'worker-v0.7.0',
-                              'worker-v0.8.0', 'worker-v0.8.1')
+                              'worker-v0.8.0', 'worker-v0.8.1', 'worker-v0.8.2')
 RUST = '1.99.1'
 VERSION = '0.1.0'
+# Only the reviewed 0.8.1 Python mining loop can be replaced in-place.
+# CUDA, native proof bindings and every other inventory entry must match.
+COMPATIBLE_MINER_HASH = 'b44d6ca03aa6b0e7e3b7c37f98cc0b26f957dd313ea599c5ba964d0782ff9778'
 
 
 class NativeError(Exception):
@@ -188,6 +191,47 @@ def read_build(native_root):
     return state, folder, python
 
 
+def refresh_compatible_build(native_root, source, tools):
+    """Reuse compiled artifacts only for the explicitly reviewed loop update."""
+    root = clean_path(native_root)
+    try:
+        state = json.loads(regular(root / 'current.json', 1024 * 1024))
+        folder = clean_path(Path(state.get('directory', '')))
+        if (folder.parent != root / 'builds' or state.get('release') != RELEASE
+                or state.get('upstreamCommit') != UPSTREAM or state.get('launcherVersion') != VERSION
+                or state.get('arch') != tools['gpu']['arch'] or state.get('nvccVersion') != tools['nvccVersion']
+                or not (folder / 'venv/bin/python').is_file()):
+            return False
+        expected = inventory()
+        if sha(regular(folder / 'worker/miner.py')) != COMPATIBLE_MINER_HASH:
+            return False
+        for name, digest in expected.items():
+            if name != 'miner.py' and sha(regular(folder / 'worker' / name)) != digest:
+                return False
+        if sha(regular(folder / 'worker/libperla_rtx.so')) != state.get('cudaSha256'):
+            return False
+        data = regular(source / 'miner.py')
+        if sha(data) != expected['miner.py']:
+            raise NativeError('Reviewed mining loop checksum differs.')
+    except (OSError, ValueError, KeyError, NativeError):
+        return False
+    destination = folder / 'worker/miner.py'
+    fd, name = tempfile.mkstemp(prefix='miner-reviewed-', dir=destination.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(name, 0o644)
+        os.replace(name, destination)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+    read_build(native_root)
+    print('Updated the reviewed mining loop; verified CUDA and proof build retained.', flush=True)
+    return True
+
+
 def build(args):
     separate_roots(args.root, args.native_root)
     source = installed_source(args.root)
@@ -197,6 +241,7 @@ def build(args):
         previous = json.loads(regular(marker, 1024 * 1024))
         if previous.get('launcherVersion') != VERSION or previous.get('release') != RELEASE:
             raise NativeError('Existing native state belongs to another release/project and was preserved. Choose a separate --native-root.')
+        refresh_compatible_build(args.native_root, source, tools)
     try:
         state, folder, _python = read_build(args.native_root)
         if state['arch'] == tools['gpu']['arch'] and state['nvccVersion'] == tools['nvccVersion']:
@@ -381,12 +426,12 @@ def main():
         if command == 'selftest':
             p.add_argument('--output', type=Path)
         if command == 'run':
-            p.add_argument('--shares', type=int, default=1)
+            p.add_argument('--shares', type=int, default=0, help='0 = continuous (default); 1 = single-share test')
             p.add_argument('--interval', type=float, default=10)
     args = parser.parse_args()
     separate_roots(args.root, args.native_root)
-    if not 0 <= args.device < 64 or not 1 <= getattr(args, 'shares', 1) <= 100000 or not 5 <= getattr(args, 'interval', 10) <= 3600:
-        parser.error('Use device 0..63, shares 1..100000 and interval 5..3600 seconds.')
+    if not 0 <= args.device < 64 or not 0 <= getattr(args, 'shares', 0) <= 100000 or not 5 <= getattr(args, 'interval', 10) <= 3600:
+        parser.error('Use device 0..63, shares 0..100000 (0 = continuous) and interval 5..3600 seconds.')
     if args.command == 'doctor':
         installed_source(args.root)
         tools = toolchain(args.device, args.python, args.nvcc)

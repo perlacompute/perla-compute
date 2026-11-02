@@ -31,7 +31,7 @@ class NativeInstallationTests(unittest.TestCase):
         cls.assets_tmp = tempfile.TemporaryDirectory()
         folder = Path(cls.assets_tmp.name)
         subprocess.run(['python3', str(ROOT / 'scripts/package-worker-release.py'),
-                        '--output', str(folder), '--tag', 'worker-v0.8.1'],
+                        '--output', str(folder), '--tag', 'worker-v0.8.2'],
                        capture_output=True, check=True)
         cls.assets = {p.name: p.read_bytes() for p in folder.iterdir()}
         cls.code = (ROOT / 'scripts/perla-worker.py').read_bytes()
@@ -51,7 +51,7 @@ class NativeInstallationTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def install(self, release='worker-v0.8.1'):
+    def install(self, release='worker-v0.8.2'):
         bodies = dict(self.assets)
         manifest = json.loads(bodies['worker-release.json'])
         manifest.update(tag=release, version=release.removeprefix('worker-v'))
@@ -79,7 +79,7 @@ class NativeInstallationTests(unittest.TestCase):
 
     def test_verified_081_archive_passes_real_native_source_gate(self):
         installed, native = self.install()
-        self.assertEqual(w.state(self.root)['release'], 'worker-v0.8.1')
+        self.assertEqual(w.state(self.root)['release'], 'worker-v0.8.2')
         self.assertEqual(native.installed_source(self.root), Path(installed['directory']))
 
     def test_080_compatible_core_is_accepted_by_the_fixed_native_launcher(self):

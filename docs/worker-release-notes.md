@@ -1,10 +1,16 @@
-# Perla Worker 0.8.1
+# Perla Worker 0.8.2
 
-- Fix native RTX startup after installer upgrades and worker reconnection. Verified 0.8.0 and 0.8.1 installations are now recognized while the pinned GPU/proof core and file integrity checks remain enforced.
-- Reuse a matching verified native build cache. A fresh GPU host builds locally and must pass its own GPU self-test. No historical GPU result is substituted.
-- After a successful reconnect, rerun `perla start --device 0 --shares 1` using the connection already saved on the new machine. No second approval or worker recreation is required.
-- Website reconnect checks retry transient network failures, clear recovered errors, stop after completion, and cancel stale requests when the wallet or code changes.
-- The owning wallet can confirm a completed active transfer after the approval deadline. Cancelled, superseded and expired pending requests cannot authorize a transfer.
-- Worker IDs, reward wallets, accepted history, proof mathematics, mining policy and reward budgets are retained. The GPU/proof core remains 0.5.0. Old releases and assets remain immutable. Mainnet and Bridge remain closed.
+- Mining continues after accepted shares by default. `--shares 0` means continuous; `--shares 1` remains an explicit single-share test.
+- Session logs identify continuous/bounded mode, task assignment and a normal share-limit stop. Receiving a task is not earning a token reward.
+- Website setup commands no longer insert the single-share test limit. Native Ctrl+C and Docker `perla stop` are documented separately.
+- A previously verified native build can reuse its pinned proof bindings and CUDA binary when only the reviewed Python mining loop changes. Source and binary hash checks remain required.
+- Existing wallet credentials, permanent Worker IDs and accepted history remain intact. No reward policy, funding transaction, mainnet or migration setting is changed by this release.
 
-Software tests exercise installation, native-source verification, cache reuse, reconnect authorization and network recovery. Physical GPU mining after this fix remains a deployment validation; no new GPU run or independent security audit is claimed.
+Update an existing GPU installation:
+
+```bash
+"$HOME/.local/bin/perla" update --release worker-v0.8.2
+"$HOME/.local/bin/perla" start --device 0
+```
+
+For a bounded validation run, append `--shares 1`. Stop a running worker before updating. A fresh GPU self-test remains mandatory before online work. No physical GPU validation is claimed by these software tests.

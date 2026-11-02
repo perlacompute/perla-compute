@@ -21,6 +21,16 @@ adapter remains the model-serving path. Matrix mining alone is not evidence
 that a customer's AI computation was performed. This preview is for testnet
 validation; it is not a performance or profitability release.
 
+## Running continuously
+
+Worker installer 0.8.2 runs continuously by default: `perla start --device 0`.
+`--shares 0` explicitly selects continuous mode; `--shares 1` is a one-share
+validation test. A task assignment is a challenge, not a reward. Successful
+shares are proof receipts; token claims still require a funded allocation.
+The native process stays in the foreground and Ctrl+C stops it. Docker users
+stop their worker with `perla stop`. Admission or verification failures still
+stop safely, and ambiguous submissions are never blindly retried.
+
 ## Prerequisites
 
 - Linux x86-64, Docker Buildx, NVIDIA Container Toolkit, a driver compatible
@@ -54,7 +64,7 @@ No kernel or GPU clock, power, voltage or fan setting is changed.
 
 ```bash
 nvidia-smi --query-gpu=index,name,memory.total,compute_cap,driver_version --format=csv
-docker run --rm --gpus all perla-rtx-worker:0.5.0 selftest --device 0 > gpu-validation.json
+docker run --rm --gpus all perla-rtx-worker:0.8.2 selftest --device 0 > gpu-validation.json
 ```
 
 An exit code of 0 and `gpuSelfTestPassed: true` are required. The report includes
@@ -79,7 +89,7 @@ After offline validation, save the registered worker's downloaded config here:
 ```bash
 chmod 600 worker.env
 docker run --rm --gpus all --env-file worker.env \
-  perla-rtx-worker:0.5.0 run --device 0 --shares 1
+  perla-rtx-worker:0.8.2 run --device 0 --shares 1
 ```
 
 The worker repeats a GPU correctness test before contacting the coordinator.
@@ -97,7 +107,7 @@ For a supervised run after the first receipt is reviewed:
 
 ```bash
 docker run --rm --gpus all --env-file worker.env \
-  perla-rtx-worker:0.5.0 run --device 0 --shares 100 --interval 10
+  perla-rtx-worker:0.8.2 run --device 0 --shares 100 --interval 10
 ```
 
 The interval is at least 5 seconds. This is a controlled validation profile,
