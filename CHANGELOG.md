@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-04 — Stable CPU-native integration checks
+
+- Isolate the public-worker identity case from the preceding p4 scoring case by explicitly activating p1 and checking its one-unit receipt. The p4 proof and scoring assertions remain covered.
+- Allow up to five minutes for each real CPU-generated proof with two native threads, and report timeout, exit status, signal and elapsed time when generation fails.
+- Use a controlled application clock to keep slow CPU searches and UTC epoch boundaries out of admission tests. Network and subprocess timeouts still use real time; the expiry case advances past the original job deadline and checks rejection without rewriting it.
+- This changes test fixtures only. Production work targets, verifier rules, reward policy, worker release and deployed data are retained. CPU fixtures provide no physical GPU performance evidence.
+
 ## 2026-11-04 — Native integration checks for round rewards
 
 - Send the current reward-policy header in native coordinator test requests while retaining explicit rejection checks for missing protocol or reward-policy headers.

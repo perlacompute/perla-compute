@@ -10,6 +10,7 @@ import {createServer} from 'node:http';
 import {createConnection} from 'node:net';
 import {createInterface} from 'node:readline';
 import {once} from 'node:events';
+import {mock} from 'node:test';
 import {build} from 'esbuild';
 import {privateKeyToAccount} from 'viem/accounts';
 import deployment from '../../deployments/robinhood-testnet.json' with {type:'json'};
@@ -17,6 +18,9 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const nativePython=process.env.PERLA_NATIVE_PYTHON;
 const source=process.env.PERLA_PEARL_SOURCE;
 if(!nativePython||!source)throw Error('Set PERLA_NATIVE_PYTHON and PERLA_PEARL_SOURCE for the native integration test.');
+// CPU proof-search duration must not advance application deadlines or cross an
+// epoch boundary. Only Date is mocked; HTTP timers and child timeouts stay real.
+mock.timers.enable({apis:['Date'],now:Date.UTC(2026,10,4,12)});
 const scratch=resolve(root,'.sites-runtime/mining-checks');await mkdir(scratch,{recursive:true});
 await build({entryPoints:[resolve(root,'lib/perla/coordinator.ts')],outfile:resolve(scratch,'coordinator.mjs'),bundle:true,platform:'node',format:'esm',target:'node22'});
 const {handleMiningRequest}=await import(pathToFileURL(resolve(scratch,'coordinator.mjs')));
@@ -39,7 +43,13 @@ const call=(path,options={},cfg=env)=>handleMiningRequest(req(path,options),cfg)
 async function login(who){const challenge=await (await call('auth/challenge',{method:'POST',body:{address:who.address}})).json();const signature=await who.signMessage({message:challenge.message});const response=await call('auth/verify',{method:'POST',body:{id:challenge.id,signature}});assert.equal(response.status,200);const cookie=response.headers.get('set-cookie').split(';')[0];cookies.set(who.address,cookie);return cookie;}
 async function add(who=a){const response=await call('workers',{method:'POST',cookie:cookies.get(who.address),body:{name:'Native integration worker'}});assert.equal(response.status,201);return response.json();}
 async function job(w){const response=await call('work',{token:w.token});assert.equal(response.status,200,JSON.stringify(await response.clone().json()));return response.json();}
-function fixture(j){const p=spawnSync(nativePython,[resolve(root,'services/pearl-adapter/native-fixture.py')],{input:JSON.stringify({header:j.mining_job.incomplete_header_bytes}),encoding:'utf8',timeout:60000});assert.equal(p.status,0,p.stderr);return JSON.parse(p.stdout);}
+function fixture(j){
+ const timeout=300000,started=performance.now();
+ const p=spawnSync(nativePython,[resolve(root,'services/pearl-adapter/native-fixture.py')],{input:JSON.stringify({header:j.mining_job.incomplete_header_bytes}),encoding:'utf8',timeout,env:{...process.env,RAYON_NUM_THREADS:'2'}});
+ const detail=`CPU proof fixture failed after ${Math.round(performance.now()-started)}ms (limit=${timeout}ms, profile=${j.workPolicy?.profile??'bridge'}, status=${p.status}, signal=${p.signal??'none'}, error=${p.error?.code??'none'}). ${p.stderr??''}`;
+ assert.ifError(p.error?Object.assign(new Error(detail),{cause:p.error}):null);
+ assert.equal(p.status,0,detail);return JSON.parse(p.stdout);
+}
 const share=(w,j,p)=>call('shares',{method:'POST',token:w.token,body:{jobId:j.id,plainProof:p.plain_proof}});
 try{
  await test('unconfigured storage fails closed',async()=>assert.equal((await call('account',{},{})).status,503));
@@ -165,7 +175,7 @@ print(json.dumps({'valid':bool(valid),'round_valid':bool(won),'original_bits':h.
  const fresh=fixture(next);
  await test('concurrent native submissions credit a job exactly once',async()=>{const responses=await Promise.all([share(w,next,fresh),share(w,next,fresh)]);assert.deepEqual(responses.map(r=>r.status).sort(),[201,409]);});
  j=await job(w);proof=fixture(j);
- await test('expired native work is rejected',async()=>{await db.prepare('UPDATE mining_jobs SET expires=0 WHERE id=?').bind(j.id).run();assert.equal((await share(w,j,proof)).status,409);});
+ await test('expired native work is rejected',async()=>{mock.timers.tick((j.expires-Math.floor(Date.now()/1000)+1)*1000);assert.equal((await share(w,j,proof)).status,409);});
  await test('revoked worker cannot request new work',async()=>{await call('workers/'+other.id,{method:'DELETE',cookie:cookies.get(b.address)});assert.equal((await call('work',{token:other.token})).status,401);});
  await test('one account cannot revoke another account’s worker',async()=>{await call('workers/'+w.id,{method:'DELETE',cookie:cookies.get(b.address)});assert.equal((await call('work',{token:w.token})).status,200);});
  await test('reward preparation requires operator authorization',async()=>assert.equal((await call('operator/epochs',{method:'POST',body:{epoch:1,budget:'100'}})).status,401));
@@ -193,12 +203,15 @@ print(json.dumps({'valid':bool(valid),'round_valid':bool(won),'original_bits':h.
  await test('legacy worker requests fail with an explicit upgrade status',async()=>{for(const name of ['x-perla-protocol','x-perla-reward-policy']){const request=req('work',{token:w.token});request.headers.delete(name);assert.equal((await handleMiningRequest(request,env)).status,426,name);}});
  await test('operational worker counts never expose credentials',async()=>{const response=await call('worker/status',{token:w.token});assert.equal(response.status,200);const data=await response.json();assert.equal(data.ledgerCredit,0);assert(!JSON.stringify(data).includes(w.token));assert(data.counts.some(c=>c.kind==='accepted'));});
  await test('public miner identity earns only after a genuine bound proof reaches the wallet ledger',async()=>{
+  // This identity test must not inherit the p4 profile from the scoring test.
+  const reset=await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation}});assert.equal(reset.status,200,await reset.clone().text());
   const token='ba'.repeat(32);const connected=await(await call('worker/connect',{method:'POST',token,body:{wallet:b.address,name:'public-4090'}})).json();
-  const publicWorker={id:connected.id,token};const j=await job(publicWorker);assert.equal(j.recipient,b.address.toLowerCase());
+  const publicWorker={id:connected.id,token};const j=await job(publicWorker);assert.equal(j.recipient,b.address.toLowerCase());assert.equal(j.workPolicy.profile,'p1');
   const receipt=await share(publicWorker,j,fixture(j));assert.equal(receipt.status,201,await receipt.clone().text());
+  assert.equal((await receipt.json()).workWeight,1);
   const account=await(await call('account',{cookie:cookies.get(b.address)})).json();assert.equal(account.totals.shares,1);assert(account.history.some(s=>s.worker_id===connected.id));
   assert.equal((await call('rewards/account',{token})).status,401);
  });
  await test('logout invalidates the browser session',async()=>{await call('auth/logout',{method:'POST',cookie:cookies.get(b.address)});assert.equal((await call('account',{cookie:cookies.get(b.address)})).status,401);});
  console.log(`${passed} mining integration checks passed. Real native PlainProof verification; CPU fixture generation only.`);
-}finally{verifier.kill();db.close();await rm(scratch,{recursive:true,force:true});}
+}finally{verifier.kill();db.close();mock.timers.reset();await rm(scratch,{recursive:true,force:true});}
