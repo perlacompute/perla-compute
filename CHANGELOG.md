@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-04 — Native integration checks for round rewards
+
+- Send the current reward-policy header in native coordinator test requests while retaining explicit rejection checks for missing protocol or reward-policy headers.
+- Replace retired trial setup with authenticated work-policy and round-policy activation against the pinned testnet token and distributor.
+- Check current receipt work weights and independently compare the native verifier's harder-target verdict using the original challenge.
+- Retain signed-wallet authorization, worker isolation, proof/challenge binding, duplicate/concurrent credit, expiry, revocation, TCP bridge and immutable job-policy checks.
+- These are CPU-generated native proof tests with disposable SQLite; they are not a physical GPU benchmark or a public-chain payout test. Runtime code, reward policy, worker-v0.9.1 assets and deployed data are retained.
+
 ## 2026-11-04 — Repository maintenance and build checks
 
 - Remove completed GitHub account/profile drafts, obsolete patch handoff files and the duplicate root validation record; their previous contents remain in Git history.

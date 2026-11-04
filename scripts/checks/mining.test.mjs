@@ -12,6 +12,7 @@ import {createInterface} from 'node:readline';
 import {once} from 'node:events';
 import {build} from 'esbuild';
 import {privateKeyToAccount} from 'viem/accounts';
+import deployment from '../../deployments/robinhood-testnet.json' with {type:'json'};
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const nativePython=process.env.PERLA_NATIVE_PYTHON;
 const source=process.env.PERLA_PEARL_SOURCE;
@@ -26,12 +27,12 @@ const secret='test-only-native-verifier-secret-'.repeat(2);
 const verifier=spawn(nativePython,[resolve(root,'services/pearl-adapter/verifier.py'),'--port','0'],{env:{...process.env,PERLA_PEARL_SOURCE:source,PERLA_VERIFIER_TOKEN:secret},stdio:['ignore','pipe','pipe']});
 let nativeLog='';verifier.stderr.on('data',d=>nativeLog+=d);
 const nativePort=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Native verifier startup timeout: '+nativeLog)),20000);verifier.on('exit',()=>{clearTimeout(timer);reject(Error('Native verifier failed: '+nativeLog));});verifier.stdout.on('data',d=>{const m=String(d).match(/127\.0\.0\.1:(\d+)/);if(m){clearTimeout(timer);resolve(Number(m[1]));}});});
-const env={DB:db,PERLA_MINING_ENABLED:'true',PERLA_VERIFIER_URL:`http://127.0.0.1:${nativePort}`,PERLA_VERIFIER_TOKEN:secret,PERLA_OPERATOR_TOKEN:'operator-test-secret-'.repeat(3)};
+const env={DB:db,PERLA_MINING_ENABLED:'true',PERLA_VERIFIER_URL:`http://127.0.0.1:${nativePort}`,PERLA_VERIFIER_TOKEN:secret,PERLA_OPERATOR_TOKEN:'operator-test-secret-'.repeat(3),PERLA_REWARD_TOKEN:deployment.token,PERLA_DISTRIBUTOR_ADDRESS:deployment.distributor};
 const a=privateKeyToAccount('0x'+'11'.repeat(32));const b=privateKeyToAccount('0x'+'22'.repeat(32));
 const cookies=new Map();let passed=0;
 const test=async(name,fn)=>{await fn();passed++;console.log('PASS',name);};
 function req(path,{method='GET',body,cookie,address=a.address,token,origin='https://perla.test'}={}){
- const headers={'content-type':'application/json',origin,'x-perla-protocol':'perla-pearl-plain-v4'};if(cookie)headers.cookie=cookie;if(token)headers.authorization='Bearer '+token;
+ const headers={'content-type':'application/json',origin,'x-perla-protocol':'perla-pearl-plain-v4','x-perla-reward-policy':'perla-rounds-v1'};if(cookie)headers.cookie=cookie;if(token)headers.authorization='Bearer '+token;
  return new Request('https://perla.test/api/mining/'+path,{method,headers,...(body!==undefined?{body:typeof body==='string'?body:JSON.stringify(body)}:{})});
 }
 const call=(path,options={},cfg=env)=>handleMiningRequest(req(path,options),cfg);
@@ -113,28 +114,48 @@ try{
   const r=await call('worker/validation',{method:'POST',token:w.token,body:{report}});assert.equal(r.status,200);assert.equal((await r.json()).uploaded,true);
   assert.equal((await(await call('status')).json()).miningEnabled,false);
  });
- await test('operator-controlled trial admits only its named worker and one genuine native proof',async()=>{
-  const cfg={...env,PERLA_MINING_ENABLED:'false'};
-  assert.equal((await call('operator/validations')).status,401);
-  const rows=await(await call('operator/validations',{token:env.PERLA_OPERATOR_TOKEN})).json();const report=rows.validations.find(v=>v.worker_id===w.id);
-  assert.equal((await call('operator/trials',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{workerId:w.id,validationHash:'stale'}})).status,409);
-  assert.equal((await call('operator/trials',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{workerId:w.id,validationHash:report.hash}},cfg)).status,200);
-  assert.equal((await call('work',{token:other.token},cfg)).status,503);
-  const jr=await call('work',{token:w.token},cfg);assert.equal(jr.status,200);const j=await jr.json();const proof=fixture(j);
-  await db.prepare("UPDATE mining_jobs SET protocol='test-hold' WHERE id=?").bind(j.id).run();const jr2=await call('work',{token:w.token},cfg);assert.equal(jr2.status,200);const j2=await jr2.json();const proof2=fixture(j2);await db.prepare("UPDATE mining_jobs SET protocol='perla-pearl-plain-v4' WHERE id=?").bind(j.id).run();
-  const rs=await Promise.all([call('shares',{method:'POST',token:w.token,body:{jobId:j.id,plainProof:proof.plain_proof}},cfg),call('shares',{method:'POST',token:w.token,body:{jobId:j2.id,plainProof:proof2.plain_proof}},cfg)]);
-  assert.equal(rs.filter(r=>r.status===201).length,1);assert.equal((await call('work',{token:w.token},cfg)).status,503);
-  assert.equal((await(await call('status',{},cfg)).json()).miningEnabled,false);
-  // Isolate the pre-existing integration expectations from this explicit trial fixture.
-  await db.prepare('DELETE FROM mining_shares WHERE worker_id=?').bind(w.id).run();await db.prepare('DELETE FROM mining_worker_trials').run();await db.prepare('DELETE FROM mining_jobs').run();
+ await test('round activation requires operator authorization and an active work policy',async()=>{
+  const request={method:'POST',body:{}};
+  assert.equal((await call('operator/reward-rounds/activate',request)).status,401);
+  const response=await call('operator/reward-rounds/activate',{...request,token:env.PERLA_OPERATOR_TOKEN});
+  assert.equal(response.status,409,await response.clone().text());
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_jobs').first()).n,0);
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_shares').first()).n,0);
  });
  await test('policy activation requires an authenticated current GPU report',async()=>{assert.equal((await call('operator/policy',{method:'POST',body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation}})).status,401);assert.equal((await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation:{}}})).status,400);const r=await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p1',startEpoch:Math.floor(Date.now()/86400000),validation}});assert.equal(r.status,200,await r.clone().text());});
+
+ await test('activated work policy alone cannot open round mining',async()=>{
+  const response=await call('work',{token:w.token});assert.equal(response.status,503,await response.clone().text());
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_jobs').first()).n,0);
+ });
+ await test('native-aware round activation pins the reviewed token and enables current work',async()=>{
+  const response=await call('operator/reward-rounds/activate',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{}});
+  assert.equal(response.status,200,await response.clone().text());const policy=await response.json();assert.equal(policy.policy,'perla-rounds-v1');
+  const pin=await db.prepare('SELECT token,distributor FROM mining_reward_policy WHERE id=1').first();
+  assert.equal(pin.token,deployment.token.toLowerCase());assert.equal(pin.distributor,deployment.distributor.toLowerCase());
+  assert.equal((await(await call('status')).json()).miningEnabled,true);
+ });
 
  await test('worker secrets are hashed and never returned by account reads',async()=>{const result=await(await call('account',{cookie:cookies.get(a.address)})).json();assert.equal(result.workers.length,1);assert(!JSON.stringify(result).includes(w.token));const row=await db.prepare('SELECT token_hash FROM mining_workers WHERE id=?').bind(w.id).first();assert.notEqual(row.token_hash,w.token);});
  await test('paused admission does not create a job',async()=>assert.equal((await call('work',{token:w.token},{...env,PERLA_MINING_ENABLED:'false'})).status,503));
  await test('missing native verifier does not create work',async()=>assert.equal((await call('work',{token:w.token},{...env,PERLA_VERIFIER_URL:undefined})).status,503));
  let j=await job(w);let proof=fixture(j);
  await test('native job envelope binds wallet and fixed certificate version',async()=>{assert.equal(Buffer.from(j.mining_job.incomplete_header_bytes,'base64').length,76);assert.equal(j.recipient,a.address.toLowerCase());assert.equal(j.mining_job.cert_version,3);assert.equal(j.chainId,46630);});
+ await test('authenticated native verification matches the independent harder-target check',async()=>{
+  const payload={header:j.mining_job.incomplete_header_bytes,plain_proof:proof.plain_proof,cert_version:3,protocol:'perla-pearl-plain-v4',round_bits:j.round.bits};
+  const code=`import base64,json,sys,pearl_mining as pm
+p=json.load(sys.stdin)
+h=pm.IncompleteBlockHeader.from_bytes(base64.b64decode(p['header'],validate=True))
+proof=pm.PlainProof.from_base64(p['plain_proof'])
+valid,_=pm.verify_plain_proof_for_cert_version(3,h,proof)
+won,_=pm.verify_plain_proof_for_cert_version(3,h,proof,nbits_override=p['round_bits'])
+print(json.dumps({'valid':bool(valid),'round_valid':bool(won),'original_bits':h.nbits}))`;
+  const reference=spawnSync(nativePython,['-c',code],{input:JSON.stringify(payload),encoding:'utf8',timeout:30000});assert.equal(reference.status,0,reference.stderr);const expected=JSON.parse(reference.stdout);assert.equal(expected.valid,true);assert.equal(expected.original_bits,j.workPolicy.bits);
+  const denied=await fetch(env.PERLA_VERIFIER_URL+'/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});assert.equal(denied.status,401);
+  const response=await fetch(env.PERLA_VERIFIER_URL+'/verify',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+secret},body:JSON.stringify(payload)});assert.equal(response.status,200);const actual=await response.json();
+  assert.equal(actual.valid,true);assert.equal(actual.round_valid,expected.round_valid);assert.equal(actual.round_bits,j.round.bits);assert.equal(actual.round_target_policy,'perla-rounds-v1');
+  assert.equal((await db.prepare('SELECT COUNT(*) n FROM mining_shares').first()).n,0);
+ });
  await test('another worker cannot submit a valid proof for this job',async()=>assert.equal((await share(other,j,proof)).status,409));
  await test('altered native proof is rejected without credit',async()=>{const raw=Buffer.from(proof.plain_proof,'base64');raw[Math.floor(raw.length/2)]^=1;const response=await share(w,j,{plain_proof:raw.toString('base64')});assert([422,503].includes(response.status));const total=await db.prepare('SELECT COUNT(*) AS n FROM mining_shares').first();assert.equal(total.n,0);});
  await test('valid native Pearl proof creates one durable contribution',async()=>{const response=await share(w,j,proof);assert.equal(response.status,201,JSON.stringify(await response.clone().json()));const result=await(await call('account',{cookie:cookies.get(a.address)})).json();assert.equal(result.totals.points,1);assert.equal(result.history.length,1);});
@@ -167,9 +188,9 @@ try{
   }finally{reader?.close();socket?.destroy();bridge.kill();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
  });
  await test('job difficulty and scoring remain immutable across a profile change',async()=>{
-  const before=await job(w);const now=Math.floor(Date.now()/86400000);const activated=await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p4',startEpoch:now,validation}});assert.equal(activated.status,200);const same=await job(w);assert.equal(same.id,before.id);assert.equal(same.workPolicy.points,1);await db.prepare('UPDATE mining_jobs SET expires=0 WHERE id=?').bind(same.id).run();const weighted=await job(w);assert.equal(weighted.workPolicy.points,4);const submitted=await share(w,weighted,fixture(weighted));assert.equal(submitted.status,201,await submitted.clone().text());assert.equal((await submitted.json()).points,4);
+  const before=await job(w);const now=Math.floor(Date.now()/86400000);const activated=await call('operator/policy',{method:'POST',token:env.PERLA_OPERATOR_TOKEN,body:{profile:'p4',startEpoch:now,validation}});assert.equal(activated.status,200);const same=await job(w);assert.equal(same.id,before.id);assert.equal(same.workPolicy.points,1);await db.prepare('UPDATE mining_jobs SET expires=0 WHERE id=?').bind(same.id).run();const weighted=await job(w);assert.equal(weighted.workPolicy.points,4);const submitted=await share(w,weighted,fixture(weighted));assert.equal(submitted.status,201,await submitted.clone().text());assert.equal((await submitted.json()).workWeight,4);
  });
- await test('legacy worker requests fail with an explicit upgrade status',async()=>{const request=req('work',{token:w.token});request.headers.delete('x-perla-protocol');assert.equal((await handleMiningRequest(request,env)).status,426);});
+ await test('legacy worker requests fail with an explicit upgrade status',async()=>{for(const name of ['x-perla-protocol','x-perla-reward-policy']){const request=req('work',{token:w.token});request.headers.delete(name);assert.equal((await handleMiningRequest(request,env)).status,426,name);}});
  await test('operational worker counts never expose credentials',async()=>{const response=await call('worker/status',{token:w.token});assert.equal(response.status,200);const data=await response.json();assert.equal(data.ledgerCredit,0);assert(!JSON.stringify(data).includes(w.token));assert(data.counts.some(c=>c.kind==='accepted'));});
  await test('public miner identity earns only after a genuine bound proof reaches the wallet ledger',async()=>{
   const token='ba'.repeat(32);const connected=await(await call('worker/connect',{method:'POST',token,body:{wallet:b.address,name:'public-4090'}})).json();
