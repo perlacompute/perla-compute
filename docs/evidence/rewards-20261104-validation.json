@@ -1,0 +1,44 @@
+{
+  "recordedAt": "2026-11-04T00:23:30.672181+00:00",
+  "workerRelease": "worker-v0.9.1",
+  "backgroundWorkerIncluded": false,
+  "checks": {
+    "earnedRewardReceiptRejectionTests": {
+      "passed": 8,
+      "scope": "Recorded public receipts; rejection of failed or substituted receipts, wrong token, missing transfer, smoke epoch and tampered allocation."
+    },
+    "automaticTestnetLifecycle": {
+      "passed": 15,
+      "scope": "Real local SQLite/EVM; GPU, verifier and GitHub are test doubles."
+    },
+    "productionHttp": {
+      "passed": 13,
+      "scope": "Real production Next server and temporary SQLite; GitHub release responses are test doubles."
+    },
+    "nextProductionBuild": "passed",
+    "typescript": "passed",
+    "publicationHandoff": {
+      "passed": 4,
+      "scope": "Disposable local git fixtures; reviewed files only, repeat application, remote advance rejection and runtime-path exclusion."
+    },
+    "sourcePublicationAudit": "passed"
+  },
+  "liveProof": {
+    "chainId": 46630,
+    "epoch": 20760,
+    "recipient": "0xc1189f7160f306465666e9718167386862c98dff",
+    "amount": "1532.570312341986489842",
+    "symbol": "PERL",
+    "claimTransaction": "0xa6e376f0e7562251e19939307e1d3a82a4e0698768333058e3c1b3a58359b9cd",
+    "mode": "fresh-chain-read",
+    "earnedRewardConfirmed": true,
+    "block": "148016684",
+    "checkedAt": "2026-11-04T00:19:45.496Z",
+    "scope": "Verifies the allocation, canonical funding/claim receipts and token transfer. Does not independently attest to physical GPU execution."
+  },
+  "limitations": [
+    "Physical GPU evidence is the operator-observed RTX 4090 validation record. No new GPU execution was performed by this closeout.",
+    "No mainnet transaction, public load test or independent audit.",
+    "GitHub publication and VPS deployment are not implied by preparing this source."
+  ]
+}

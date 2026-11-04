@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T00:17:46.425Z",
+  "scope": "Fresh Perla Robinhood Testnet validation; not mainnet, a performance benchmark or an independent audit.",
+  "chainId": 46630,
+  "epoch": 20760,
+  "workerRelease": "worker-v0.9.1",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "token": "0xfeab80c7665973d91f3f3fab36cbb3183c8dc4f8",
+  "distributor": "0xa35c0cb08279998c2948ac340ef056d07bdc5547",
+  "recipient": "0xc1189f7160f306465666e9718167386862c98dff",
+  "allocationIndex": 0,
+  "amountBaseUnits": "1532570312341986489842",
+  "decimals": 18,
+  "root": "0xe44e9f34942d18e8ff0b1905fbd3272065928b74cbbe29d31fd41ab73ab0c65a",
+  "funding": {
+    "transaction": "0xc310e19b20e3a805cd177f5521580d2c23a31641c09cf836cf455017a6593da9",
+    "block": "148010834",
+    "blockHash": "0x4a79024bf8db4c7c943f5d18244f575d28e89c119a947f38e3f39ae0e236747d"
+  },
+  "claim": {
+    "transaction": "0xa6e376f0e7562251e19939307e1d3a82a4e0698768333058e3c1b3a58359b9cd",
+    "block": "148010896",
+    "blockHash": "0xe3c4ac351c2cdb02a5233df164aa4ac89406841b0244f91d77146e5739b4c0e4"
+  },
+  "smokeExcluded": true,
+  "readinessSnapshot": {
+    "chainId": 46630,
+    "phase": "live",
+    "resetAt": 1793649832,
+    "ready": true,
+    "checks": [
+      {
+        "id": "mining",
+        "passed": true,
+        "detail": "Work admission and qualifying-round rewards are enabled."
+      },
+      {
+        "id": "verifier",
+        "passed": true,
+        "detail": "The authenticated native verifier supports the current round target."
+      },
+      {
+        "id": "worker_release",
+        "passed": true,
+        "detail": "The public worker-v0.9.1 installer and assets pass integrity checks."
+      },
+      {
+        "id": "gpu",
+        "passed": true,
+        "detail": "At least one fresh worker uploaded a passing GPU self-test."
+      },
+      {
+        "id": "continuous_work",
+        "passed": true,
+        "detail": "At least 3 accepted shares spanning 5 minutes are required."
+      },
+      {
+        "id": "round_winner",
+        "passed": true,
+        "detail": "A real GPU proof must win the harder reward target."
+      },
+      {
+        "id": "treasury",
+        "passed": true,
+        "detail": "Fresh canonical contract balances and recorded liabilities reconcile."
+      },
+      {
+        "id": "automatic_settlement",
+        "passed": true,
+        "detail": "The encrypted-signer settlement service must report success within 10 minutes."
+      },
+      {
+        "id": "contract_smoke",
+        "passed": true,
+        "detail": "An isolated 1 PERL funding and claim check must be confirmed. It creates no mining earnings."
+      },
+      {
+        "id": "earned_reward_claim",
+        "passed": true,
+        "detail": "A real earned round allocation must close, fund and reach an approved validation wallet."
+      }
+    ],
+    "acceptedShares": 297,
+    "roundsWon": 1,
+    "observedWorkSeconds": 3762,
+    "testedGpuNames": [
+      "NVIDIA GeForce RTX 4090"
+    ],
+    "automaticSettlement": {
+      "enabled": true,
+      "lastChecked": 1793751460,
+      "error": null
+    },
+    "contractSmoke": {
+      "verified": true,
+      "fundingTransaction": "0xda6f257be45b012cfcc8ab130d0bf7c8d067033c8659a4333128123319ea12d4",
+      "claimTransaction": "0x0e776c00ab062e66b530ead31fb49c63584eab080f61f4736a69cc13577210c5",
+      "excludedFromMiningRewards": true
+    },
+    "checkedAt": 1793751461,
+    "mainnetEnabled": false,
+    "scope": "Only the GPU models observed here have fresh validation evidence. This is a testnet launch check, not an independent audit or an AI customer-work benchmark."
+  }
+}

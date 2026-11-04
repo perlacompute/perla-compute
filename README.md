@@ -1,5 +1,9 @@
 # Perla Compute
 
+## Earned testnet reward evidence
+
+The fresh testnet completed a qualifying GPU round, funded epoch 20760 and delivered its earned allocation to the reward wallet. See [the closeout record](docs/releases/rewards-live-20261104.md) for transactions, scope and reproducible read-only checks. Public epoch funding is automatic; miners claim funded allocations in Reward Center.
+
 Verifiable GPU mining, qualifying reward rounds and funded PERL settlement on Robinhood Testnet.
 
 [Website](https://perlacompute.xyz) · [Miner setup](https://perlacompute.xyz/platform/setup) · [Docs](https://perlacompute.xyz/docs) · [Network status](https://perlacompute.xyz/status) · [Worker releases](https://github.com/perlacompute/perla-compute/releases)

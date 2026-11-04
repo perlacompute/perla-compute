@@ -6,6 +6,7 @@ import {resolve} from 'node:path';
 import deploymentPin from '../deployments/robinhood-testnet.json' with {type:'json'};
 import {settleRewards} from './reward-settle.mjs';
 import {auditManifest} from './reward-manifest.mjs';
+import {testnetValidationWallets} from '../lib/perla/validation-wallet.mjs';
 export const RESET_ID='perla-fresh-testnet-20261103-v1';
 export const SMOKE_AMOUNT=10n**18n;
 export const SMOKE_BASE=1n<<128n;
@@ -101,7 +102,7 @@ export async function automaticTick({key,env=process.env,options={},operator=ope
   if(!start.smoke_verified){const smoke=await contractSmoke({key,resetAt:start.reset_at,env,options});await operator('operator/testnet/smoke',smoke);}
   const review=await settleRewards({action:'review',env,operator,...options,log:()=>{}});
   const result=review.epochs.length?await settleRewards({action:'settle',key,expectedPlan:review.planHash,env,operator,...options,log:()=>{}}):review;
-  // During the owner-only test phase, relay only the owner's real earned allocations.
+  // Relay only approved test wallets' earned allocations; the signer stays pinned.
   const queue=await operator('operator/testnet/testing-claims');
   if(queue.phase==='testing')for(const m of queue.items){
    auditManifest(m);if(m.version!==2||m.policy!=='perla-rounds-v1')throw Error('Only real round earnings enter the test claim check.');
@@ -109,7 +110,8 @@ export async function automaticTick({key,env=process.env,options={},operator=ope
    if(!equal(m.distributor,d.distributor))throw Error('Test claim distributor differs.');
    const state=await c.client.readContract({address:d.distributor,abi:distributorAbi,functionName:'epochs',args:[BigInt(m.epoch)]});
    if(!equal(state[0],m.root)||state[1]!==BigInt(m.budget))throw Error('The earned test claim is not funded.');
-   for(const a of m.allocations.filter(a=>equal(a.address,d.owner)&&BigInt(a.amount)>0n)){
+   const recipients=testnetValidationWallets(env,d.owner);
+   for(const a of m.allocations.filter(a=>recipients.includes(a.address.toLowerCase())&&BigInt(a.amount)>0n)){
     if(await c.client.readContract({address:d.distributor,abi:distributorAbi,functionName:'isClaimed',args:[BigInt(m.epoch),BigInt(a.index)]}))continue;
     await sendOnce(c,resolve(env.PERLA_SETTLEMENT_DIR||'/app/data/reward-settlement','test-claim-'+m.epoch+'-'+a.index+'.json'),d.distributor,distributorAbi,'claim',[BigInt(m.epoch),BigInt(a.index),a.address,BigInt(a.amount),a.proof]);
    }

@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "chainId": 46630,
+  "epoch": 20760,
+  "budget": "1532570312341986489842",
+  "distributor": "0xa35c0cb08279998c2948ac340ef056d07bdc5547",
+  "root": "0xe44e9f34942d18e8ff0b1905fbd3272065928b74cbbe29d31fd41ab73ab0c65a",
+  "totalWork": "99",
+  "allocations": [
+    {
+      "address": "0xc1189f7160f306465666e9718167386862c98dff",
+      "workUnits": 99,
+      "amount": "1532570312341986489842",
+      "index": 0,
+      "proof": []
+    }
+  ],
+  "policy": "perla-rounds-v1",
+  "policyHash": "815efedf86e62a15e709bddfb4bad13569ddc24e714614e56fdcccaba8bc15d5",
+  "emissionStartEpoch": 20759,
+  "dailyCap": "683526359304525974469823",
+  "rounds": [
+    {
+      "id": "fded47c4-15c1-4bf7-9b50-5d86047b096d",
+      "reward": "1532570312341986489842",
+      "snapshot": "[{\"address\":\"0xc1189f7160f306465666e9718167386862c98dff\",\"workUnits\":99}]",
+      "difficulty_weight": 256,
+      "target_bits": 469827583,
+      "winner_share": "36435cf0-efaf-4e47-a349-a08323659230"
+    }
+  ]
+}

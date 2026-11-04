@@ -6,10 +6,11 @@ import {accountRewards} from './portal';
 import {chainSnapshot,assertCanonical} from './chain-read';
 import {parseAbi,encodeAbiParameters,keccak256,type Address,type Hex} from 'viem';
 import deployment from '@/deployments/robinhood-testnet.json';
-export type TestnetEnv={DB?:MiningDatabase;PERLA_RPC_URL?:string;PERLA_MINING_ENABLED?:string;PERLA_REWARD_TOKEN?:string;PERLA_DISTRIBUTOR_ADDRESS?:string};
+import {testnetValidationWallets} from './validation-wallet.mjs';
+export type TestnetEnv={DB?:MiningDatabase;PERLA_RPC_URL?:string;PERLA_MINING_ENABLED?:string;PERLA_REWARD_TOKEN?:string;PERLA_DISTRIBUTOR_ADDRESS?:string;PERLA_TESTNET_VALIDATION_WALLET?:string};
 export type LaunchState={reset_id:string;reset_at:number;phase:'testing'|'live';automation_enabled:number;automation_checked:number|null;automation_error:string|null;smoke_epoch:string|null;smoke_funding_tx:string|null;smoke_claim_tx:string|null;smoke_verified:number;launched_at:number|null};
 export async function launchState(e:TestnetEnv){return e.DB?e.DB.prepare('SELECT * FROM mining_testnet_state WHERE id=1').first<LaunchState>():null;}
-export async function canMine(e:TestnetEnv,address:string){const s=await launchState(e);return !s||s.phase==='live'||address.toLowerCase()===deployment.owner.toLowerCase();}
+export async function canMine(e:TestnetEnv,address:string){const s=await launchState(e);return !s||s.phase==='live'||testnetValidationWallets(e,deployment.owner).includes(address.toLowerCase());}
 const smokeAbi=parseAbi(['function epochs(uint256) view returns(bytes32,uint256,uint256)','function isClaimed(uint256,uint256) view returns(bool)','function rewardToken() view returns(address)']);
 export async function verifyContractSmoke(e:TestnetEnv,input:{epoch:string;fundingTransaction:Hex;claimTransaction:Hex}){
  const s=await launchState(e);if(!s||input.epoch!==((1n<<128n)+BigInt(s.reset_at)).toString())throw Error('The smoke epoch does not belong to this reset.');
@@ -35,7 +36,7 @@ export async function readiness(e:TestnetEnv,evidence:Evidence,now=Math.floor(Da
  ]);
  let claimed=false,claimCheckAvailable=true;
  const funded=await db.prepare("SELECT COUNT(*) n FROM mining_reward_epochs WHERE state='active'").first<{n:number}>();
- if(funded?.n){try{const a=await accountRewards(e,deployment.owner.toLowerCase());claimed=a.items.some(x=>x.status==='claimed'&&x.rewardPolicy==='perla-rounds-v1');claimCheckAvailable=!a.items.some(x=>x.status==='unavailable');}catch{claimCheckAvailable=false;}}
+ if(funded?.n){const results=await Promise.allSettled(testnetValidationWallets(e,deployment.owner).map(address=>accountRewards(e,address)));for(const result of results){if(result.status==='rejected'){claimCheckAvailable=false;continue;}claimed ||= result.value.items.some(x=>x.status==='claimed'&&x.rewardPolicy==='perla-rounds-v1');if(result.value.items.some(x=>x.status==='unavailable'))claimCheckAvailable=false;}}
  const gpuNames=validations.results.flatMap(row=>{try{const r=JSON.parse(row.report);return r.gpuSelfTestPassed===true&&r.device?.name?[String(r.device.name)]:[];}catch{return [];}});
  const duration=shares?.first!==null&&shares?.first!==undefined&&shares.last!==null?shares.last-shares.first:0;
  const checks=[
@@ -48,7 +49,7 @@ export async function readiness(e:TestnetEnv,evidence:Evidence,now=Math.floor(Da
   {id:'treasury',passed:treasury.status==='available'&&treasury.data?.coverage==='covered',detail:treasury.status==='available'?'Fresh canonical contract balances and recorded liabilities reconcile.':'The fresh treasury snapshot is unavailable; inspect operator diagnostics.'},
   {id:'automatic_settlement',passed:s.automation_enabled===1&&!!s.automation_checked&&now-s.automation_checked<=600&&!s.automation_error,detail:'The encrypted-signer settlement service must report success within 10 minutes.'},
   {id:'contract_smoke',passed:s.smoke_verified===1,detail:'An isolated 1 PERL funding and claim check must be confirmed. It creates no mining earnings.'},
-  {id:'earned_reward_claim',passed:claimed,detail:claimCheckAvailable?'A real earned round allocation must close, fund and reach the owner wallet.':'The fresh earned-claim check is unavailable.'},
+  {id:'earned_reward_claim',passed:claimed,detail:claimCheckAvailable?'A real earned round allocation must close, fund and reach an approved validation wallet.':'The fresh earned-claim check is unavailable.'},
  ];
  return {chainId:46630,phase:s.phase,resetAt:s.reset_at,ready:checks.every(c=>c.passed),checks,acceptedShares:shares?.n??0,roundsWon:rounds?.n??0,observedWorkSeconds:duration,testedGpuNames:[...new Set(gpuNames)],automaticSettlement:{enabled:!!s.automation_enabled,lastChecked:s.automation_checked,error:s.automation_error},contractSmoke:{verified:!!s.smoke_verified,fundingTransaction:s.smoke_funding_tx,claimTransaction:s.smoke_claim_tx,excludedFromMiningRewards:true},checkedAt:now,mainnetEnabled:false,scope:'Only the GPU models observed here have fresh validation evidence. This is a testnet launch check, not an independent audit or an AI customer-work benchmark.'};
 }

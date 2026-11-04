@@ -18,7 +18,7 @@ import { publicPortalResponse, accountRewards } from './portal';
 export interface MiningEnv {
   DB?: MiningDatabase; PERLA_MINING_ENABLED?:string; PERLA_VERIFIER_URL?:string;
   PERLA_VERIFIER_TOKEN?:string; PERLA_OPERATOR_TOKEN?:string; PERLA_RPC_URL?:string;
-  PERLA_REWARD_TOKEN?:string; PERLA_DISTRIBUTOR_ADDRESS?:string;
+  PERLA_REWARD_TOKEN?:string; PERLA_DISTRIBUTOR_ADDRESS?:string; PERLA_TESTNET_VALIDATION_WALLET?:string;
 }
 class HttpError extends Error { constructor(public status:number, message:string){super(message);} }
 const fail=(status:number,message:string):never=>{throw new HttpError(status,message);};
@@ -214,7 +214,7 @@ export async function handleMiningRequest(r:Request,e:MiningEnv):Promise<Respons
   }
   if(path==='work'&&r.method==='GET'){
    const w=await worker(r,db,now);await throttle(db,`work:${w.id}`,120,now);
-   if(!await canMine(e,w.address))fail(503,'Fresh testnet validation is in progress. Public work opens after the complete GPU and reward checks pass.');
+   if(!await canMine(e,w.address))fail(503,'This reward wallet is not admitted for validation. Work is limited to the configured validation wallets until the complete GPU and reward checks pass.');
    if(r.headers.get('x-perla-protocol')!==PROTOCOL||r.headers.get('x-perla-reward-policy')!==ROUND_POLICY)fail(426,'Upgrade the GPU CLI to worker 0.9.1 for round rewards.');
    const policy=await workPolicy(e);if(!policy.miningEnabled)fail(503,'Mining admission is paused. Your worker identity is retained.');
    await requireRounds(e);const round=await openRewardRound(e,now);

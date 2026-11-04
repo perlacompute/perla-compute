@@ -1,5 +1,12 @@
 # Reward rounds / worker 0.9.0
 
+## 2026-11-04 — Earned testnet reward closeout
+
+- Synchronize the configured validation-wallet and setup/status fixes with the observed deployment.
+- Record the qualifying round, funded epoch 20760 and successful 1,532.570312341986489842 PERL claim.
+- Add repeatable read-only reward verification and rejection tests based on actual public receipts.
+- Clarify automatic epoch funding versus public-wallet claiming. Worker remains worker-v0.9.1.
+
 - Separate ordinary shares from harder qualifying round proofs, with atomic PPLNS snapshots and bounded daily earned rewards.
 - Preserve funded legacy claims; hold unfunded legacy allocations and audit cancellation of the owner validation allocation.
 - Update Reward Center, docs and native worker/verifier integration. No mainnet deployment or epoch funding.
