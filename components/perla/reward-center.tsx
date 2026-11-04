@@ -22,6 +22,7 @@ const transactionUrl = (hash: string) => 'https://explorer.testnet.chain.robinho
 
 export function RewardCenter({ initialTab = 'epochs', compact = false }: { initialTab?: 'epochs' | 'mine'; compact?: boolean }) {
   const { account, loading, busy, error, signIn } = useMiningAccount();
+  const [showTreasury,setShowTreasury]=useState(false);
   const [tab, setTab] = useState(initialTab); const [epochs, setEpochs] = useState<EpochSummary[] | null>(null); const [next, setNext] = useState<number | null>(null);
   const [networkError, setNetworkError] = useState(''); const [loadingEpochs, setLoadingEpochs] = useState(false);
   const [rewards, setRewards] = useState<RewardAccount | null>(null); const [rewardError, setRewardError] = useState(''); const [checkingRewards, setCheckingRewards] = useState(false);
@@ -127,8 +128,8 @@ export function RewardCenter({ initialTab = 'epochs', compact = false }: { initi
   const amountFor = (states: string[]) => currentRewards ? tokenAmount(currentRewards.items.filter(a => states.includes(a.status) && a.token.toLowerCase() === deployment.token.toLowerCase()).reduce((sum, a) => sum + BigInt(a.amount), 0n).toString(), {symbol: 'PERL', decimals: 18}).value : '—';
   const currentRewards = rewards?.address.toLowerCase() === address?.toLowerCase() ? rewards : null;
   return <div className={compact ? 'reward-center portal-compact' : 'reward-center'}>
-    {!compact && <div className="portal-intro"><div><span className="eyebrow">PERLA / REWARD CENTER</span><h1>From accepted work.<br/><em>To a funded allocation.</em></h1><p>Follow published epoch budgets, inspect distributions, and claim eligible testnet rewards.</p></div><EpochClock/></div>}
-    {!compact && <><RewardAllocationPlan/><TreasuryPanel/></>}
+    {!compact && <div className="portal-intro"><div><span className="eyebrow">PERLA / REWARD CENTER</span><h1>Your work.<br/><em>Your earned allocations.</em></h1><p>Follow qualifying rounds and funded epochs. Connect your reward wallet to check and claim eligible PERL.</p></div><EpochClock/></div>}
+    {!compact && <div className="public-reward-guide" aria-label="How reward claims work"><div><span>01 / EARN</span><strong>A qualifying round unlocks rewards.</strong><p>Accepted shares measure work. Completed rounds determine your allocation through the recent contribution window.</p></div><div><span>02 / SETTLE</span><strong>Closed epochs are funded automatically.</strong><p>The scheduler settles earned allocations after UTC close and the five-minute safety window.</p></div><div><span>03 / CLAIM</span><strong>Claim with your reward wallet.</strong><p>Open My rewards, sign in and claim a funded allocation on Robinhood Testnet. Your wallet confirms the transaction.</p></div></div>}
     <LiveRewardSummary current={currentRewards?.current}/>
     <div className="portal-tabs" role="group" aria-label="Reward views"><button aria-pressed={tab === 'epochs'} className={tab === 'epochs' ? 'active' : ''} onClick={() => setTab('epochs')}>Network epochs</button><button aria-pressed={tab === 'mine'} className={tab === 'mine' ? 'active' : ''} onClick={() => setTab('mine')}>My rewards</button><span>Robinhood Testnet</span></div>
     {tab === 'epochs' ? <section className="portal-card"><div className="portal-card-head"><div><span className="micro">PUBLISHED DISTRIBUTIONS</span><h2>Every epoch, explained.</h2></div><button className="icon-btn" aria-label="Refresh published epochs" disabled={loadingEpochs} onClick={() => void loadEpochs()}><RefreshCw size={17}/></button></div>
@@ -144,6 +145,7 @@ export function RewardCenter({ initialTab = 'epochs', compact = false }: { initi
         </section>
       </>}
     </>}
+    {!compact && <details className="public-detail" onToggle={event=>setShowTreasury(event.currentTarget.open)}><summary>Treasury coverage and planned token allocations</summary><div><RewardAllocationPlan/>{showTreasury&&<TreasuryPanel/>}</div></details>}
     <EvidenceNote/>
   </div>;
 }

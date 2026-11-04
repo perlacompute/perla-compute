@@ -1,0 +1,95 @@
+{
+  "recordedAt": "2026-11-04T01:14:00.718765+00:00",
+  "baseCommit": "1aef6072c499b096fa20ddfb195bd948358a6f25",
+  "workerRelease": "worker-v0.9.1",
+  "backgroundWorkerIncluded": false,
+  "checks": {
+    "softwareSuite": {
+      "command": "npm run check",
+      "passed": true,
+      "summary": [
+        "6 VPS persistence checks passed.",
+        "13 reward checks passed on a local EVM. No public-chain transaction was sent.",
+        "10 fresh-testnet checks passed using SQLite and a local EVM. No public-chain or GPU test was performed.",
+        "15 automatic testnet lifecycle checks passed using real SQLite/EVM; GPU, verifier and GitHub were test doubles.",
+        "12 round reward checks passed with real SQLite; proof validity was a deliberate test double.",
+        "6 cancellation checks passed with real SQLite and explicit RPC doubles.",
+        "22 reward-settlement checks passed using real SQLite and a local EVM. Accepted shares were seeded fixtures; no GPU or public-chain transaction was used.",
+        "12 inference boundary checks passed.",
+        "28 portal checks passed with SQLite, signed requests and a local EVM. No GPU run or public-chain transaction was performed.",
+        "8 policy and operations checks passed.",
+        "19 worker-release checks passed.",
+        "29 worker-reconnect checks passed with real SQLite and wallet signatures. The verifier is a binding stub; no physical GPU, native proof validation or public-chain transaction is claimed.",
+        "12 reconnect-monitor checks passed."
+      ]
+    },
+    "productionHttp": {
+      "passed": 17,
+      "scope": "Real production Next server and temporary SQLite; GitHub release responses are fixtures."
+    },
+    "productionBuild": "passed",
+    "typescript": "passed",
+    "shareImage": "PNG renderer checked with the retained brand fonts",
+    "sourceGuard": {
+      "passed": 2,
+      "scope": "Clean tracked public source is accepted; tracked test-runtime journals are rejected without printing contents."
+    },
+    "updater": {
+      "passed": 9,
+      "scope": "Known preimages, repeated application, independent source notes, preflight conflicts, symlink/tamper rejection, runtime exclusions, active-history and policy guards, HTTP switch markers."
+    },
+    "fullSourceCompatibility": [
+      {
+        "source": "github-baseline",
+        "applied": true,
+        "idempotent": true,
+        "sourceAuditPassed": true,
+        "runtimeConfigurationAndLedgerPreserved": true,
+        "changedSourcePaths": 46
+      },
+      {
+        "source": "deployed-baseline",
+        "applied": true,
+        "idempotent": true,
+        "sourceAuditPassed": true,
+        "runtimeConfigurationAndLedgerPreserved": true,
+        "changedSourcePaths": 55
+      },
+      {
+        "source": "github-baseline",
+        "applied": true,
+        "idempotent": true,
+        "sourceAuditPassed": true,
+        "runtimeConfigurationAndLedgerPreserved": true,
+        "changedSourcePaths": 63
+      }
+    ]
+  },
+  "visualReview": {
+    "method": "Real browser, static SSR snapshots",
+    "viewports": [
+      "desktop 1348px",
+      "miner setup iframe 390px",
+      "homepage/proof iframe 320px"
+    ],
+    "clientJavascriptEnabled": false,
+    "liveApiOrWalletActions": false,
+    "notes": "Live-site hero inspected before editing. New static layout reviewed, including earned proof and narrow setup. The narrow admission notice was corrected after review.",
+    "mobileSetupNotice": {
+      "viewport": 390,
+      "bodyClientWidth": 375,
+      "bodyScrollWidth": 375,
+      "noticeTextWidth": 269,
+      "noticeLinkGridRow": 2
+    }
+  },
+  "retainedScope": [
+    "Worker 0.9.1, GPU/proof code and installer assets",
+    "Mining and round reward policy, deployed contracts",
+    "Existing worker credentials and ledger generation",
+    "Encrypted settlement signer and automatic funding service"
+  ],
+  "deploymentPerformedByPreparation": false,
+  "physicalGpuTestByThisUpdate": false,
+  "mainnetEnabled": false
+}

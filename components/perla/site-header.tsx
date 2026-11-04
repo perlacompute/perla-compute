@@ -14,12 +14,12 @@ const exploreLinks = [
  ['/status', 'Network status', 'Read service and release evidence'],
 ] as const;
 export function SiteHeader({ logo }: { logo: ReactNode }) {
- const [open, setOpen] = useState(false), [explore, setExplore] = useState(false), [xUrl, setXUrl] = useState<string | null>(null);
+ const [open, setOpen] = useState(false), [explore, setExplore] = useState(false), [xUrl, setXUrl] = useState<string | null>('https://x.com/perlacompute');
  const path = usePathname(), id = useId(), root = useRef<HTMLElement>(null), toggle = useRef<HTMLButtonElement>(null), exploreToggle = useRef<HTMLButtonElement>(null);
  useEffect(() => { setOpen(false); setExplore(false); }, [path]);
  useEffect(() => {
   const abort = new AbortController();
-  fetch('/api/project-links', { signal: abort.signal }).then(r => r.ok ? r.json() : null).then(value => { if (!abort.signal.aborted) setXUrl(normalizeProjectX(value?.x)); }).catch(() => {});
+  fetch('/api/project-links', { signal: abort.signal }).then(r => r.ok ? r.json() : null).then(value => { if (!abort.signal.aborted) setXUrl(normalizeProjectX(value?.x) || 'https://x.com/perlacompute'); }).catch(() => {});
   return () => abort.abort();
  }, []);
  useEffect(() => {
@@ -32,6 +32,7 @@ export function SiteHeader({ logo }: { logo: ReactNode }) {
  return <><a className="skip-link" href="#main-content">Skip to content</a><header className="site-header perla-header" ref={root} data-perla-header="reference-v2"><div className="header-inner">
   {logo}
   <nav id={id} className={'perla-main-nav' + (open ? ' is-open' : '')} aria-label="Main navigation">
+   <Link href="/platform/setup" onClick={close} aria-current={path === '/platform/setup' ? 'page' : undefined}>Mining</Link>
    <div className="perla-explore"><button ref={exploreToggle} type="button" className="perla-explore-toggle" aria-expanded={explore} aria-controls={id + '-explore'} onClick={() => setExplore(v => !v)}>Explore<ChevronDown size={13}/></button>
     <div className="perla-explore-menu" id={id + '-explore'} hidden={!explore}>{exploreLinks.map(([href, label, caption]) => <Link key={href} href={href} onClick={close} aria-current={path === href ? 'page' : undefined}><span><strong>{label}</strong><small>{caption}</small></span><ArrowUpRight size={15}/></Link>)}</div>
    </div>

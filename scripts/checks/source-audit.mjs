@@ -25,7 +25,7 @@ function privatePath(path) {
   const parts = path.split('/');
   const name = basename(path);
   if (name === '.env.example') return false;
-  return parts.some(p => ignored.has(p) || ['data', 'verification', 'hf-cache', 'pearl-upstream', '.perla-backups'].includes(p))
+  return parts.some(p => ignored.has(p) || p.startsWith('.sites-runtime') || ['data', 'verification', 'hf-cache', 'pearl-upstream', '.perla-backups'].includes(p))
     || /(^|\.)env(?:\.|$)/.test(name)
     || /\.(?:pem|key|p12|pfx|seed|mnemonic|sqlite(?:-wal|-shm)?|sqlite3|db(?:-wal|-shm)?|log|pyc|tsbuildinfo)$/.test(name);
 }

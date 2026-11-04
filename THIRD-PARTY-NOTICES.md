@@ -18,3 +18,7 @@ That checkout supplies the CUDA kernels, vLLM integration, proof construction an
 - Package dependencies retain their own licenses. The npm lockfile records the installed dependency graph.
 
 Project names, model names and marks identify their respective owners and do not establish affiliation. Model weights are not included in this repository and have their own access requirements and licenses.
+
+## Share-image font instance
+
+`public/fonts/dm-sans-og.ttf` is a static weight-400/default-optical-size instance of the existing DM Sans variable font, generated for the PNG share renderer. It retains the font's copyright metadata and the existing SIL Open Font License in `public/fonts/dm-sans-OFL.txt`. The regular website font remains the original variable font.

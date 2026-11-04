@@ -31,7 +31,7 @@ export function ComputeHero() {
    <p className="compute-hero-eyebrow">GPU mining <span aria-hidden="true">/</span> Verifiable compute</p>
    <h1 id="compute-hero-title">Your GPU.<br/><em>A greater purpose.</em></h1>
    <p className="compute-hero-description">GPU mining for AI compute.<br className="compute-mobile-break"/> Built on Robinhood.</p>
-   <div className="compute-hero-actions"><Link className="button compute-primary" href="/platform/setup">Explore mining<ArrowUpRight size={17}/></Link><Link className="button compute-secondary" href="/docs">Read the docs<ArrowUpRight size={17}/></Link></div>
+   <div className="compute-hero-actions"><Link className="button compute-primary" href="/platform/setup">Start mining<ArrowUpRight size={17}/></Link><Link className="button compute-secondary" href="/docs">Read the docs<ArrowUpRight size={17}/></Link></div>
   </div>
   <div className="compute-scene-controls" hidden={!ready}><button type="button" onClick={toggle} aria-label={paused ? 'Play ambient motion' : 'Pause ambient motion'} aria-pressed={paused}>{paused ? <Play size={14}/> : <Pause size={14}/>}</button><button type="button" onClick={() => field.current?.reset()} aria-label="Reset 3D view"><RotateCcw size={14}/></button></div>
   <p id="compute-scene-description" className="compute-sr-only">Decorative, interactive compute blocks. The sculpture is an illustration, not a display of live network activity.</p>

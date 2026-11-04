@@ -1,5 +1,9 @@
 # Perla Compute
 
+## Public testnet website
+
+Start with [miner setup](https://perlacompute.xyz/platform/setup), follow [accepted proofs](https://perlacompute.xyz/explorer), and inspect [funded rewards](https://perlacompute.xyz/rewards). The current installer is worker-v0.9.1. See [the public-site release record](docs/releases/public-site-20261104.md) for the UI, service-status and discovery changes.
+
 ## Earned testnet reward evidence
 
 The fresh testnet completed a qualifying GPU round, funded epoch 20760 and delivered its earned allocation to the reward wallet. See [the closeout record](docs/releases/rewards-live-20261104.md) for transactions, scope and reproducible read-only checks. Public epoch funding is automatic; miners claim funded allocations in Reward Center.

@@ -19,8 +19,8 @@
     "db:backup": "node scripts/backup-vps.mjs",
     "check:emission": "node scripts/checks/emission.test.mjs",
     "typecheck": "tsc --noEmit",
-    "check:source": "node scripts/checks/source-audit.mjs",
-    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:fresh-testnet && npm run check:round-rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:worker-reconnect && npm run check:reconnect-ui && npm run check:reward-plan && npm run check:earned-proof",
+    "check:source": "node scripts/checks/source-audit.mjs && node --test scripts/checks/source-audit.test.mjs",
+    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:fresh-testnet && npm run check:round-rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:worker-reconnect && npm run check:reconnect-ui && npm run check:reward-plan && npm run check:earned-proof && npm run check:public-status",
     "check:portal": "node scripts/checks/portal.test.mjs",
     "check:rtx": "python3 services/rtx-worker/test_protocol.py",
     "check:operations": "python3 scripts/checks/operations_test.py",
@@ -32,7 +32,8 @@
     "check:reconnect-ui": "node scripts/checks/reconnect-monitor.test.mjs",
     "check:round-rewards": "node scripts/checks/round-rewards.test.mjs && node scripts/checks/reward-cancellation.test.mjs",
     "check:fresh-testnet": "node scripts/checks/fresh-testnet.test.mjs && node scripts/checks/testnet-automation.test.mjs",
-    "check:earned-proof": "node --test scripts/checks/earned-reward-proof.test.mjs"
+    "check:earned-proof": "node --test scripts/checks/earned-reward-proof.test.mjs",
+    "check:public-status": "node --test scripts/checks/public-status.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -1,5 +1,13 @@
 # Reward rounds / worker 0.9.0
 
+## 2026-11-04 — Public testnet website polish
+
+- Clarify homepage participation, hardware scope and the verified earned reward.
+- Refine setup, workspace, Reward Center and live service-status presentation.
+- Preserve worker 0.9.1 and the current mining/reward policies.
+- Add public discovery metadata, sitemap/robots and a branded share image.
+- See docs/releases/public-site-20261104.md for validation, scope and the unposted X draft.
+
 ## 2026-11-04 — Earned testnet reward closeout
 
 - Synchronize the configured validation-wallet and setup/status fixes with the observed deployment.

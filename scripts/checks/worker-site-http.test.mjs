@@ -106,5 +106,22 @@ try {
   for(const path of ['/rewards','/platform/rewards','/docs','/whitepaper']){const response=await call(path);assert.equal(response.status,200);const text=await response.text();assert(text.includes('data-reward-plan="perla-rewards-plan-v1"'));assert(text.includes('130M'));if(['/docs','/whitepaper'].includes(path))assert(text.includes('id="migration"'));}
   const setup=await(await call('/platform/setup')).text();assert(!setup.includes('THE NEXT CHAPTER'));assert(setup.includes('/platform/bridge'));assert.equal((await(await call('/api/mining/status')).json()).miningEnabled,false);
  });
+ await test('public homepage connects the real earned payout to setup, records and the preserved hero',async()=>{
+  const text=await(await call('/')).text();const evidence=JSON.parse(await readFile(resolve(root,'docs/evidence/rewards-20760.json'),'utf8'));
+  assert(text.includes('data-perla-hero="matrix-v2"'));assert(text.includes('Start mining'));assert(text.includes('Live network snapshot'));assert(text.includes('1,532.5703'));assert(text.includes(evidence.claim.transaction));assert(text.includes('/rewards/20760'));assert(text.includes('/platform/setup?reuse=1'));assert(!text.includes('e1e4c5ae-c9a6-48c1-8166-013605811aaa'));assert(!text.includes('GPU validation pending'));assert(!text.includes('Historical RTX 4090 trial recorded'));assert(text.includes('https://x.com/perlacompute'));assert(text.includes('name="twitter:card"'));assert(text.includes('property="og:image"'));
+ });
+ await test('public setup keeps the approved CLI and explains persistent sessions without creating a new identity',async()=>{
+  const response=await call('/platform/setup');const text=await response.text();assert(text.includes('worker-v0.9.1'));assert(!text.includes('worker-v0.10.0'));assert(text.includes('tmux new -s perla'));assert(text.includes('tmux attach -t perla'));assert(text.includes('Checking network'));assert(!text.includes('Validation release'));assert(!text.includes('A foundation in progress'));assert(text.includes('name="robots" content="index, follow"'));
+  const reuse=await(await call('/platform/setup?reuse=1')).text();assert(reuse.includes('Use an existing worker.'));assert(reuse.includes('id="existing-worker-id"'));assert(!reuse.includes('id="replace-worker-connection"'));
+ });
+ await test('reward pages distinguish automatic funding from wallet claims and retain the migration plan',async()=>{
+  for(const path of ['/rewards','/platform/rewards']){const text=await(await call(path)).text();assert(text.includes('How reward claims work'));assert(text.includes('Closed epochs are funded automatically.'));assert(text.includes('Claim with your reward wallet.'));assert(text.includes('Treasury coverage and planned token allocations'));assert(text.includes('data-reward-plan="perla-rewards-plan-v1"'));}
+  const status=await(await call('/status')).text();assert(status.includes('Live service checks'));assert(status.includes('Observed on RTX 4090'));assert(status.includes('Historical software validation records'));assert(status.includes('1,532.5703'));assert(status.includes('aria-label="Mining and reward readiness"'));
+ });
+ await test('public discovery metadata and share image serve correctly without exposing account routes',async()=>{
+  const sitemap=await(await call('/sitemap.xml')).text();assert(sitemap.includes('https://perlacompute.xyz/platform/setup'));assert(!sitemap.includes('/platform/settings'));assert(!sitemap.includes('/platform/reconnect'));
+  const robots=await(await call('/robots.txt')).text();assert(robots.includes('Disallow: /api/'));assert(robots.includes('Disallow: /platform/reconnect'));
+  const image=await call('/opengraph-image');assert.equal(image.status,200);assert(image.headers.get('content-type')?.startsWith('image/png'));const bytes=Buffer.from(await image.arrayBuffer());assert.deepEqual([...bytes.subarray(0,8)],[137,80,78,71,13,10,26,10]);await writeFile(resolve(root,'../public-share-image.png'),bytes);
+ });
  console.log(`${passed} worker website production HTTP checks passed.`);
 }finally{await stop();await rm(temp,{recursive:true,force:true});}
