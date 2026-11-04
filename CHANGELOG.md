@@ -1,4 +1,12 @@
-# Reward rounds / worker 0.9.0
+# Changelog
+
+## 2026-11-04 — Repository maintenance and build checks
+
+- Remove completed GitHub account/profile drafts, obsolete patch handoff files and the duplicate root validation record; their previous contents remain in Git history.
+- Keep public release notes focused on product changes and validation. Remove unposted social drafts from those notes.
+- Update architecture and current release notes for worker 0.9.1, qualifying rounds, automatic epoch funding and public wallet claims.
+- Repair documentation links and regenerate the tracked public-source checksum inventory.
+- Fix the RTX build-context allowlist and retain round-aware production HTTP checks, including legacy-client rejection.
 
 ## 2026-11-04 — Public testnet website polish
 
@@ -6,7 +14,7 @@
 - Refine setup, workspace, Reward Center and live service-status presentation.
 - Preserve worker 0.9.1 and the current mining/reward policies.
 - Add public discovery metadata, sitemap/robots and a branded share image.
-- See docs/releases/public-site-20261104.md for validation, scope and the unposted X draft.
+- See docs/releases/public-site-20261104.md for validation and scope.
 
 ## 2026-11-04 — Earned testnet reward closeout
 
@@ -19,21 +27,21 @@
 - Preserve funded legacy claims; hold unfunded legacy allocations and audit cancellation of the owner validation allocation.
 - Update Reward Center, docs and native worker/verifier integration. No mainnet deployment or epoch funding.
 
-# Worker 0.7.0 — Wallet and rig-name setup
+## Worker 0.7.0 — Wallet and rig-name setup
 
 - Added public reward-address and worker-name connection with private local credentials; browser login remains for dashboard management and claims.
 - Miner Setup now generates an install-and-start command. GPU checks and report uploads are automatic.
 - Registration retries reuse the same identity; matching rig labels cannot overwrite another worker. Public connections do not consume the signed-wallet worker quota.
 - Preserved native proof checks, existing verified RTX runtime reuse, paused public admission, immutable earlier releases and the agreed reward plan. This remains a one-share validation release.
 
-# Unreleased — Rewards and Miner Setup
+## Mining allocation plan and setup consolidation
 
 - Published the mainnet mining allocation plan: 70M PERL migration cap and 130M future mainnet mining, within the planned fixed 1B supply.
 - Added a closed Bridge preview with 100:7 arithmetic and a planned global 1M mainnet PERL daily output cap. No migration contract, reserve funding or transaction path is activated.
 - Replaced manual setup checks with wallet-and-name command generation; work remains gated by server admission and funded reward status.
 - Removed the sidebar promotion and aligned Rewards, Docs, Whitepaper and participant guidance. Existing worker releases, mining rules and funded testnet claims remain unchanged.
 
-# 0.4.0-rc.1 — RTX validation preview
+## 0.4.0-rc.1 — RTX validation preview
 
 - Added an independent dense INT8 WMMA matrix worker with native sm86, sm89 and
   sm120 CUDA targets for RTX30/40/50; no model checkpoint is required.
@@ -47,7 +55,6 @@
   standalone-matrix versus AI-inference scope. Admission and reward funding
   are not activated by the web patch or worker build.
 
-# Changelog
 
 ## 0.3.0 — 25 October 2026
 
@@ -59,7 +66,7 @@
 - Add one non-destructive SQLite receipt lookup index and portal behavior tests.
 - Preserve existing contracts, deployment state, verifier configuration and paused admission settings.
 
-See [UPDATE-0.3.0.md](UPDATE-0.3.0.md) and [docs/portal-api.md](docs/portal-api.md).
+See [the portal API](docs/portal-api.md) for the maintained interface.
 
 ## 0.2.4 — 25 October 2026
 
@@ -74,7 +81,7 @@ The existing deployment has not been automatically upgraded by this source prepa
 
 ## Earlier validation releases
 
-See [UPDATE-0.2.3.md](UPDATE-0.2.3.md), [DOCS-UPDATE-0.2.2.md](DOCS-UPDATE-0.2.2.md) and [VERIFICATION.md](VERIFICATION.md) for historical scope. Historical token names in those records describe the version reviewed at that time.
+Historical software validation records remain in `public/validation-record-*.md` and `docs/validation-*.md`. Retired patch instructions remain available in Git history. Historical token names describe the version reviewed at that time.
 
 ## Fresh testnet ready / worker 0.9.1
 

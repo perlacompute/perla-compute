@@ -1,10 +1,15 @@
-Perla 0.5.0 improves the testnet mining and operations foundation.
+# Perla Compute — current testnet release
 
-- Guided Miner Setup with hardware selection, wallet/worker registration, doctor, offline GPU validation and first-share tracking.
-- Protocol v4: non-saturating difficulty profiles, immutable per-job points/policy, native validation and legacy receipt preservation. Existing workers require the 0.5.0 package.
-- Public testnet treasury snapshot, canonical-block funding checks, recorded funding transactions, reproducible allocation audit and claim inclusion/finality tracking.
-- Redacted worker diagnostics, bounded verification concurrency, durable rejection/stale/duplicate counts and operator health.
-- Encrypted authenticated backups, isolated SQLite restore drills and optional systemd health/backup timers.
-- Pinned CI actions, CPU/native checks, CUDA compilation job, draft releases, SBOM and build provenance.
+Perla's workspace supports GPU worker setup and reuse, verified contribution receipts, qualifying reward rounds and funded PERL claims on Robinhood Testnet.
 
-Mainnet remains on hold. Contracts, supply and existing reward roots are unchanged. The upgrade does not activate mining, fund epochs or send chain transactions. A GPU self-test report is an operator assertion, not remote hardware attestation. Physical RTX testing and the VPS install/restore drill must be completed on their respective hosts. No external audit is claimed.
+- Worker-v0.9.1 retains permanent identity, owner-approved reconnect and continuous mining by default.
+- Reward rounds use a difficulty-weighted PPLNS window. Ordinary shares alone do not unlock tokens. Earned closed epochs are funded automatically; public miners claim in Reward Center.
+- The public website connects miner setup, Proof Explorer, Reward Center, current service status and the recorded RTX 4090-to-earned-claim result.
+- RTX Docker builds include the round-policy file, and production HTTP checks send the current reward-policy header while retaining rejection checks for legacy clients.
+- Repository maintenance removes completed account-setup drafts and obsolete patch handoff documents, consolidates release history, updates architecture and repairs links and source checksums.
+
+The maintenance update preserves the current worker release assets, protocol, contracts, reward policy, contribution history and VPS runtime. The public Software checks run provides the published commit's CI result; local application and contract checks retain their documented scope.
+
+[Changelog](CHANGELOG.md) · [Mining and rewards](docs/REWARD-ROUNDS.md) · [Recorded earned claim](docs/releases/rewards-live-20261104.md) · [Operations](docs/TESTNET-OPERATIONS.md)
+
+Mainnet and migration remain closed. No physical GPU test, public-chain transaction or independent security audit is performed by this repository cleanup.

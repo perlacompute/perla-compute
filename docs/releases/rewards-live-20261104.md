@@ -52,11 +52,3 @@ This closeout retains worker-v0.9.1 and the existing reward policy. It does not 
 The configured-wallet automatic lifecycle suite uses a real temporary SQLite database and local EVM, with explicit GPU, verifier and GitHub doubles. Production HTTP/build checks cover the synchronized setup/status/rewards changes. The new proof rejection suite uses copies of the actual recorded public receipts, and the live proof check reads Robinhood Testnet directly.
 
 The observed physical GPU was an RTX 4090. Receipt verification independently checks the token allocation and transfer, not physical hardware attestation, useful AI inference, broader GPU compatibility or production-scale load. This is not an independent audit or a measured yield promise. The precise local check results are recorded in `rewards-20261104-validation.json` beside the other evidence.
-
-## X draft — not posted
-
-Perla's fresh testnet completed its first earned GPU mining payout: 1,532.5703 $PERL to the worker's reward wallet, verified onchain.
-
-Qualifying work, funded allocations and public testnet mining are now connected.
-
-https://explorer.testnet.chain.robinhood.com/tx/0xa6e376f0e7562251e19939307e1d3a82a4e0698768333058e3c1b3a58359b9cd

@@ -11,7 +11,7 @@ Shares measure valid weighted work; they are not a points balance or a promise o
 - Maximum 5,000 reward recipients per epoch, including addresses carried into the maximum PPLNS window. This is an operational bound, not one-person-one-worker enforcement.
 - Jobs commit to the round ID and policy hash and expire at UTC close. Round closure rejects stale proofs without credit; an explicit safe rejection can fetch fresh work. An ambiguous submission is never blindly retried.
 - Each won round atomically stores its winner and recipient-weight snapshot. Integer amounts use largest remainder, with deterministic address tie-breaking.
-- After UTC close plus five minutes, only earned round amounts enter a version-2 manifest. Funding and activation are separate owner actions using the existing distributor.
+- After UTC close plus five minutes, only earned round amounts enter a version-2 manifest. The configured owner-authorized settlement service funds and activates earned allocations using the existing distributor.
 
 ## Fresh testnet generation
 
@@ -19,4 +19,4 @@ The owner-authorized fresh-testnet installer removes all old local work and rewa
 
 ## Automatic funding and opening
 
-The configured encrypted systemd signer prepares, funds and activates earned closed epochs every two minutes, after UTC close plus five minutes. An isolated 1 PERL contract round trip is excluded from mining earnings. In the owner-only test phase, real earned allocations are relayed to the owner. Public mining opens automatically after fresh GPU, sustained-work, qualifying-round, treasury and real earned-claim evidence passes. See TESTNET-OPERATIONS.md for the complete workflow.
+The configured encrypted systemd signer prepares, funds and activates earned closed epochs every two minutes, after UTC close plus five minutes. An isolated 1 PERL contract round trip is excluded from mining earnings. During initial validation, a real earned claim can be relayed to the approved validation recipient. Public miners claim funded allocations in Reward Center. Public mining opens automatically after fresh GPU, sustained-work, qualifying-round, treasury and real earned-claim evidence passes. See TESTNET-OPERATIONS.md for the complete workflow.

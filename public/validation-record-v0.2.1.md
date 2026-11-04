@@ -30,4 +30,4 @@ Reproduce the HTTP check after npm run build:
 
     node scripts/checks/vps-http.test.mjs
 
-See DEPLOY-VPS.md for native verifier/GPU and reward activation requirements.
+For current operation, see [the testnet runbook](/docs#operations). This record describes the historical 0.2.1 test scope.

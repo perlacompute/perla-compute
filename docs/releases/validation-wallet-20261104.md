@@ -18,4 +18,4 @@ The installer keeps a private source/configuration backup, performs no reset, re
 
 ## Later validation
 
-The configured-wallet fix was subsequently observed in the deployed fresh testnet. The first earned GPU reward reached that wallet and the launch checks passed. See [the rewards closeout](rewards-live-20261104.md) for exact transactions, reproducible proof and the current X draft. The earlier testing-stage draft is superseded.
+The configured-wallet fix was subsequently observed in the deployed fresh testnet. The first earned GPU reward reached that wallet and the launch checks passed. See [the rewards closeout](rewards-live-20261104.md) for exact transactions and reproducible proof.

@@ -6,7 +6,7 @@ https://github.com/pearl-research-labs/pearl/tree/82e6eee7076aafe10123e08db78f10
 
 The source also informs the declining reference reward curve. Perla supplies its application coordinator, wallet authorization, worker bridge, contribution ledger, reward accounting and Robinhood integration. Its RTX worker adds a portable INT8 matrix backend.
 
-Original copyright notices and licenses remain in [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md), the [adapter notice](../services/pearl-adapter/NOTICE.md), and [RTX notice](../services/rtx-worker/NOTICE.md). Upstream subprojects, dependencies, fonts and model weights retain their own licenses. Names identify their respective owners and do not establish affiliation or endorsement.
+Copyright and license information is retained with the [adapter](../services/pearl-adapter/NOTICE.md), [RTX worker](../services/rtx-worker/NOTICE.md), [UI stylesheet](../vendor/shadcn-tailwind-4.13.0.LICENSE.md), [DM Sans](../public/fonts/dm-sans-OFL.txt) and [Instrument Serif](../public/fonts/instrument-serif-OFL.txt). Upstream subprojects, dependencies, fonts and model weights retain their own licenses. Names identify their respective owners and do not establish affiliation or endorsement.
 
 ## Compatibility identifiers
 

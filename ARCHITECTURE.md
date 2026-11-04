@@ -1,39 +1,37 @@
-# Perla Compute · 0.5.0 testnet architecture
+# Perla Compute architecture
 
-The VPS runs a Next.js portal and a single SQLite writer process. A separate, authenticated CPU service verifies native Pearl PlainProof certificates. Participants run CUDA workers on their own Linux GPU hosts. Settlement uses the existing ERC-20 token and Merkle distributor on Robinhood Testnet 46630. Mainnet is on hold; no separate chain is created.
+Perla runs a Next.js portal and SQLite contribution ledger, an authenticated native proof verifier, and an owner-authorized reward settlement service. GPU workers connect to the coordinator; funded PERL allocations settle on Robinhood Testnet, chain 46630.
 
-## Work and identity
+## Worker identity
 
-Wallet authorization creates a single-use signed nonce and short-lived HttpOnly session. Worker credentials are revocable, wallet-scoped random tokens, stored only as hashes. The 76-byte synthetic work header binds the site, chain, epoch, worker, recipient and random job ID. It is a work-domain container, not a Pearl block.
+A worker starts with a public reward address and display name. The coordinator issues a permanent Worker ID and a private, revocable machine credential. Dashboard management and claims use wallet authorization. Moving a worker to another host requires owner approval and replaces the prior machine credential while retaining accepted history and the reward address.
 
-Protocol v4 uses target profiles from `lib/perla/work-profiles.json`. Each job permanently stores its bits, profile, policy fingerprint and points. Reward score is the exact reference-target ratio, not client-reported speed. The coordinator checks ownership, canonical encoding, expiry, revocation, proof/header hash binding and epoch finalization. A unique job index and commit-time conditions make concurrent submissions idempotent.
+GPU checks precede online work. Normal starts reuse the saved identity and mine continuously; `--shares 1` selects a bounded diagnostic run. Native workers run in the foreground. The public CLI remains worker-v0.9.1.
 
-The native verifier supports v3 for backward-compatible installation/rollback, and v4 for current work. V4 admits dense rank-128 certificates, bounded K and tile area, with no uint256 saturation. Two resource-limited child processes are allowed; coordinator backpressure separately bounds simultaneous verifier calls. No unverified work earns credit. Metrics failure cannot undo or duplicate an accepted share.
+## Work verification and reward rounds
 
-Policy activation records an operator-reviewed GPU self-test report hash and a UTC start epoch. It is an operator assertion, not remote hardware attestation. Fresh state is inactive; master environment admission alone cannot open mining. Legacy receipts, points and reward roots remain unchanged.
+Jobs bind the worker, recipient, chain, UTC epoch, round and policy. The verifier checks the native certificate and its exact challenge. Difficulty-weighted shares record work; receiving a task or an ordinary accepted share creates no token entitlement by itself.
 
-## Worker modes
+A proof must also meet the harder round target. A winning round atomically records its winner and the weighted PPLNS recipient window. Integer rewards use deterministic largest-remainder allocation. Each UTC epoch has a declining daily ceiling and at most 446 earning rounds; unused capacity stays in treasury without rollover. See [the round rules](docs/REWARD-ROUNDS.md).
 
-The RTX path targets sm86, sm89 and sm120 (RTX 30/40/50). Its CUDA kernel and independent CPU reference compare full GEMM, all partial-sum transcripts, signed extremes, native proof acceptance and negative vectors. This is synthetic standalone matrix mining, not AI model inference. Software/native tests and compiled architecture targets do not establish physical GPU validation.
+Duplicate, stale, invalid and revoked-worker submissions cannot create a second credit. Workers do not blindly retry an ambiguous proof submission. SQL transactions and immutable round snapshots preserve the allocation inputs.
 
-H100/H200 use the separate pinned vLLM integration, sm90, model memory and inference requirements. Both paths use the same scoped bridge/client and native certificate format. Upstream is pinned to `82e6eee7076aafe10123e08db78f100d270c0582`; see retained licenses and NOTICE files. CPU test oracles are never a runtime mining fallback.
+## Funded settlement
 
-The RTX loop continues after non-winning attempts, refreshes work, drops stale work, and stops instead of retrying ambiguous share POSTs. Host doctor checks do not issue work or submit proofs. Runtime self-tests precede online mining.
+After UTC close and the five-minute safety window, the configured settlement service prepares, checks, funds and activates earned allocations. Its testnet signer is encrypted as a host-bound systemd credential. Public miners claim funded allocations in Reward Center with their reward wallet.
 
-## Accounting and trust
+The distributor enforces the funded Merkle root and prevents duplicate claims. Treasury and claim reads check canonical testnet state; an unavailable RPC response is not treated as a payment. The initial validation-wallet claim relay is separate from the public user claim flow. The observed epoch 20760 funding and earned claim are documented in [the reward record](docs/releases/rewards-live-20261104.md).
 
-SQLite WAL stores workers, issued jobs, verified contribution records, epoch manifests, policy state and bounded operational aggregates. Migrations are additive and checksummed. Epoch manifests use deterministic integer allocation, sorted recipients, largest remainders, chain/contract-bound leaves and sorted-pair Merkle proofs. Once published, the snapshot is closed to further credits.
+## GPU paths
 
-The operator chooses budgets, controls the offchain verifier and publishes roots. EVM contracts verify allocation proofs, not the full Pearl computation. No permissionless validation, Sybil resistance, customer demand, hardware attestation, earnings guarantee or external audit is claimed.
+The RTX worker contains sm86, sm89 and sm120 compilation targets for RTX 30/40/50 series. It performs standalone matrix mining and native proof production. The recorded physical test was an RTX 4090; each host must pass its own GPU checks. This path does not serve paid customer AI inference.
 
-Treasury and reward checks verify chain ID, token, root and budget at canonical blocks. RPC failure remains unavailable. Published liabilities cover the coordinator's known epochs, not every possible entry in the contract mapping. A funding trace must match a canonical receipt and EpochFunded event. Claim UI differentiates pending, included and finalized; unsupported finality tags never become guessed confirmation.
+H100/H200 use a separate model-serving integration with its own hardware and model requirements. The pinned native proof source and component attribution are documented in [upstream provenance](docs/UPSTREAM.md). Wire identifiers remain stable for compatibility.
 
-## Operations and releases
+## Operations and trust
 
-Consistent database backups and deployment environment are encrypted together and authenticated before decryption. The restore drill validates a separate read-only SQLite copy in a network-isolated container. Systemd timers run authenticated health and daily backup/restore checks. No offsite destination or external alert recipient is configured.
+Persistent SQLite volumes, consistent backups, revocable credentials and bounded verifier concurrency support operation and recovery. Readiness distinguishes configuration from observed GPU work, funded allocations and an earned claim. The operator still controls offchain verification, retained contribution records and allocation publication; the reward contract does not execute the complete computation proof.
 
-The cumulative updater preflights known source hashes, creates rollback copies, upgrades the dual-protocol verifier before web rollout, checks routes and installs timers only after an initial successful restore drill. It preserves contracts, existing runtime credentials and the persistent data volume. Work stays paused.
+CI checks software behavior, production HTTP routes, CUDA compilation and CPU/native protocol integration. Hosted CPU checks are not physical GPU validation. Mainnet, token migration and the prepared background-worker release remain outside this change.
 
-GitHub CI checks source publication boundaries, SQLite, local EVM, APIs, policy, backups, CUDA compilation and CPU/native protocol paths. Versioned draft releases include checksums, a CycloneDX SBOM and build provenance. Workflows do not deploy contracts, fund epochs or enable mining. Repository publication and actual CI evidence require a connected GitHub account.
-
-See [operator runbook](docs/TESTNET-OPERATIONS.md), [security reporting](SECURITY.md) and [release notes](RELEASE_NOTES.md).
+See [operations](docs/TESTNET-OPERATIONS.md), [security reporting](SECURITY.md), [worker installation](WORKER_INSTALLER.md) and [release notes](RELEASE_NOTES.md).

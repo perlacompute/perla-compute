@@ -34,7 +34,7 @@ async function stop() {
   if (child && child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }
 }
 async function call(path, { method = 'GET', body, headers = {} } = {}) {
-  return fetch(origin + path, { method, headers: { origin, 'content-type': 'application/json', 'x-perla-protocol':'perla-pearl-plain-v4', ...(cookie ? { cookie } : {}), ...headers },
+  return fetch(origin + path, { method, headers: { origin, 'content-type': 'application/json', 'x-perla-protocol':'perla-pearl-plain-v4', 'x-perla-reward-policy':'perla-rounds-v1', ...(cookie ? { cookie } : {}), ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'manual' });
 }
 let passed = 0;
@@ -46,7 +46,7 @@ try {
       const response = await call(path); assert.equal(response.status, 200, path);
       if (path === '/status') {
         const html = await response.text();
-        assert(html.includes('Service configuration'));
+        assert(html.includes('Work admission'));
         assert(html.includes('Paused'));
         assert.equal((html.match(/<h1(?:\s|>)/g) || []).length, 1);
       } else await response.arrayBuffer();
@@ -90,6 +90,8 @@ try {
   await test('account reads hide worker secrets and paused workers receive no work', async () => {
     const r = await call('/api/mining/account'); assert.equal(r.status, 200);
     const raw = await r.text(); assert(!raw.includes(workerToken)); assert.equal(JSON.parse(raw).workers.length, 1);
+    // A legacy client must still upgrade; a current client reaches the paused-admission check.
+    assert.equal((await call('/api/mining/work', { headers: { authorization: 'Bearer ' + workerToken, 'x-perla-reward-policy': '' } })).status, 426);
     assert.equal((await call('/api/mining/work', { headers: { authorization: 'Bearer ' + workerToken } })).status, 503);
   });
   await stop(); await start();

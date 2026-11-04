@@ -34,11 +34,3 @@ The full existing `npm run check` suite passed, including four public-admission 
 Visual review uses real browser rendering of sanitized static SSR snapshots for layout. Client JavaScript and live API behavior are disabled in that visual harness; production HTTP and software checks cover the corresponding application routes. It is not a live browser wallet/claim or physical GPU test. Exact scope and updater checks are recorded in `docs/evidence/public-site-20261104.json`.
 
 The operator's updater builds while the existing container serves, publishes the reviewed GitHub source, then switches and checks the site. It compares mining/reward policy hashes, admission, reset generation and accepted-history counters. Failed post-switch checks restore the previous web image without rolling the database back. Its actual GitHub commit and deployment report are produced only when run on the website VPS.
-
-## X draft — for after successful deployment; not posted
-
-From GPU setup to funded rewards, the Perla workspace now gives every step a clearer place.
-
-Create or reconnect a worker, follow accepted proofs, and claim eligible PERL from the same reward wallet.
-
-https://perlacompute.xyz/platform/setup
