@@ -1,0 +1,26 @@
+{
+  "plan": {
+    "version": 2,
+    "chainId": 4663,
+    "supply": "1000000000",
+    "miningAllocation": "130000000",
+    "migrationAllocation": "70000000",
+    "migrationNumerator": 7,
+    "migrationDenominator": 100,
+    "migrationDailyLimit": "1000000",
+    "emissionDays": 1460,
+    "roundsPerDay": 5,
+    "roundsPerCycle": 24,
+    "cycleDays": 5,
+    "totalRounds": 7008,
+    "targetSeconds": 18000,
+    "windowMultiplier": 2,
+    "initialWorkUnits": 2048,
+    "minimumWorkUnits": 256,
+    "maximumWorkUnits": 65536,
+    "retargetRounds": 16,
+    "shareBits": 486604799,
+    "jobTtl": 300
+  },
+  "hash": "9e2ffefc50b8b3945ce17522d36dbb263a0d1834c4b2eebc2b177ec5d1aa6c9d"
+}

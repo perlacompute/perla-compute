@@ -1,0 +1,11 @@
+{
+  "tag": "mainnet-worker-v1.2.0",
+  "policyHash": "9e2ffefc50b8b3945ce17522d36dbb263a0d1834c4b2eebc2b177ec5d1aa6c9d",
+  "assets": {
+    "mainnet-worker.json": "c0991494a6c4ba10eafc397a7219759d3c986121e1a3c6ae5b82a51906ebd71c",
+    "perla-mainnet-worker.tar.gz": "16f114500bc26fb0e50bbc017cbe6fe3924635f6a77af0cddfd3a540e1a9b1b3",
+    "install.py": "46397d3fc6c25366760fbc9ef40671d2c6bc2fa6c52fe6fdaf03c2657a97a6b9",
+    "install.sh": "01a33b1812bdc06b3e42ac85afd8bd0ba4050bbb045c0f4f67352f306857d80c",
+    "SHA256SUMS": "a5322691e5ab235da4c6fd978d1f420e9a39df023f7e7d19a601a6acd16fde78"
+  }
+}
