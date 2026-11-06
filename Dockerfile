@@ -14,6 +14,8 @@ COPY --from=build --chown=node:node /app/scripts/start-vps.mjs /app/scripts/migr
 COPY --from=build --chown=node:node /app/scripts/reward-settle.bundle.mjs /app/scripts/testnet-admin.bundle.mjs ./scripts/
 COPY --from=build --chown=node:node /app/lib/vps/sqlite.mjs ./lib/vps/sqlite.mjs
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
+COPY --from=build --chown=node:node /app/scripts/mainnet/operator.bundle.mjs ./scripts/mainnet/operator.bundle.mjs
+COPY --from=build --chown=node:node /app/lib/compute/schema.sql ./lib/compute/schema.sql
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 3000

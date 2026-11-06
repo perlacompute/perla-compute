@@ -20,6 +20,9 @@ const defaultStatus: Status = { inferenceConfigured: false, activeModel: null, w
 const RuntimeContext = createContext({ status: defaultStatus, statusError: false });
 export const useRuntime = () => useContext(RuntimeContext);
 const nav = [
+ /* PERLA_MAINNET_NAV_V2 */
+ { href: '/platform/network?tab=mining', label: 'Mainnet mining', icon: Cpu },
+ { href: '/platform/network?tab=convert', label: 'Testnet migration', icon: ArrowLeftRight },
  { href: '/platform/mining', label: 'Mining', icon: Cpu },
  { href: '/platform/setup', label: 'Miner setup', icon: Terminal },
  { href: '/platform/rewards', label: 'Reward Center', icon: Wallet },
