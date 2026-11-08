@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "node scripts/build-reward-settlement.mjs && next build --webpack && node scripts/finalize-build.mjs",
+    "build": "node scripts/mainnet/build.mjs && node scripts/build-reward-settlement.mjs && next build --webpack && node scripts/finalize-build.mjs",
     "start": "node scripts/start-vps.mjs",
     "db:migrate": "node scripts/migrate-vps.mjs",
     "check:mining": "node scripts/checks/mining.test.mjs",
@@ -20,7 +20,7 @@
     "check:emission": "node scripts/checks/emission.test.mjs",
     "typecheck": "tsc --noEmit",
     "check:source": "node scripts/checks/source-audit.mjs && node --test scripts/checks/source-audit.test.mjs",
-    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:fresh-testnet && npm run check:round-rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:worker-reconnect && npm run check:reconnect-ui && npm run check:reward-plan && npm run check:earned-proof && npm run check:public-status",
+    "check": "npm run check:source && npm run check:vps && npm run check:rewards && npm run check:fresh-testnet && npm run check:round-rewards && npm run check:reward-settlement && npm run check:emission && npm run check:api && npm run check:portal && npm run check:policy && npm run check:operations && npm run check:worker-release && npm run check:worker-reconnect && npm run check:reconnect-ui && npm run check:reward-plan && npm run check:earned-proof && npm run check:public-status && npm run check:mainnet",
     "check:portal": "node scripts/checks/portal.test.mjs",
     "check:rtx": "python3 services/rtx-worker/test_protocol.py",
     "check:operations": "python3 scripts/checks/operations_test.py",
@@ -33,7 +33,10 @@
     "check:round-rewards": "node scripts/checks/round-rewards.test.mjs && node scripts/checks/reward-cancellation.test.mjs",
     "check:fresh-testnet": "node scripts/checks/fresh-testnet.test.mjs && node scripts/checks/testnet-automation.test.mjs",
     "check:earned-proof": "node --test scripts/checks/earned-reward-proof.test.mjs",
-    "check:public-status": "node --test scripts/checks/public-status.test.mjs"
+    "check:public-status": "node --test scripts/checks/public-status.test.mjs",
+    "check:mainnet": "node --test scripts/checks/mainnet/funding.test.mjs scripts/checks/mainnet/migration.test.mjs scripts/checks/mainnet/trial.test.mjs scripts/checks/mainnet/reward-10x.test.mjs scripts/checks/mainnet/commands.test.mjs scripts/checks/mainnet/core.test.mjs scripts/checks/mainnet/gateway-extra.test.mjs scripts/checks/mainnet/contracts.test.mjs scripts/checks/mainnet/operator.test.mjs scripts/checks/mainnet/protocol.test.mjs && python3 scripts/checks/mainnet/installer_test.py && python3 scripts/checks/mainnet/compose_test.py && python3 scripts/checks/mainnet/completion_test.py",
+    "check:mainnet-native": "node scripts/checks/mainnet/native.test.mjs",
+    "package:mainnet-worker": "python3 scripts/mainnet/package-worker.py --output .sites-runtime/mainnet-worker"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

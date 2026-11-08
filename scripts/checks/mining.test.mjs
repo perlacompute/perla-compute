@@ -184,7 +184,9 @@ print(json.dumps({'valid':bool(valid),'round_valid':bool(won),'original_bits':h.
  await test('upstream-compatible TCP JSON-RPC bridge completes the native work-to-ledger flow',async()=>{
   const server=createServer(async(incoming,outgoing)=>{try{const parts=[];for await(const chunk of incoming)parts.push(chunk);const response=await handleMiningRequest(new Request(`http://127.0.0.1:${server.address().port}${incoming.url}`,{method:incoming.method,headers:incoming.headers,...(parts.length?{body:Buffer.concat(parts)}:{})}),env);outgoing.writeHead(response.status,Object.fromEntries(response.headers));outgoing.end(Buffer.from(await response.arrayBuffer()));}catch{outgoing.writeHead(500);outgoing.end('{}');}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  const bridge=spawn(nativePython,[resolve(root,'services/pearl-adapter/perla_bridge.py'),'--port','0'],{env:{...process.env,PERLA_ENDPOINT:`http://127.0.0.1:${server.address().port}`,PERLA_WORKER_TOKEN:w.token},stdio:['ignore','pipe','pipe']});
+  // Test-only: use the coordinator's frozen wall clock in the Python child.
+  // Real socket and asyncio monotonic timeouts remain enabled.
+  const bridge=spawn(nativePython,['-c',"import runpy,sys\nfrom unittest.mock import patch\npath,now=sys.argv[1:]\nsys.argv=[path,'--port','0']\nwith patch('time.time',return_value=float(now)):\n runpy.run_path(path,run_name='__main__')\n",resolve(root,'services/pearl-adapter/perla_bridge.py'),String(Date.now()/1000)],{env:{...process.env,PERLA_ENDPOINT:`http://127.0.0.1:${server.address().port}`,PERLA_WORKER_TOKEN:w.token},stdio:['ignore','pipe','pipe']});
   let socket,reader;
   try{
    const port=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Bridge startup timeout')),10000);bridge.on('exit',()=>reject(Error('Bridge stopped')));bridge.stdout.on('data',d=>{const m=String(d).match(/127\.0\.0\.1:(\d+)/);if(m){clearTimeout(timer);resolve(Number(m[1]));}});});

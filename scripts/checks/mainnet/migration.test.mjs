@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {ComputeStore} from '../../../lib/compute/store.mjs';
+import {buildMigration} from '../../../lib/compute/migration.mjs';
+const wallet='0x'+'11'.repeat(20),token='0x'+'22'.repeat(20),distributor='0x'+'33'.repeat(20),vault='0x'+'44'.repeat(20),root='0x'+'55'.repeat(32),hash='0x'+'66'.repeat(32);
+function fixture(){
+ const s=new ComputeStore();const c={startEpoch:101,rewardVault:vault};
+ const row={state:'active',epoch:100,token,root,budget:String(100n*10n**18n),funding_tx:hash,manifest:JSON.stringify({policy:'perla-rounds-v1',chainId:46630,distributor,root})};
+ const legacyClient={getChainId:async()=>46630,getBlock:async x=>x.blockTag?{number:100n}:{hash},readContract:async()=>[root,BigInt(row.budget),0n],getTransactionReceipt:async()=>({status:'success',blockNumber:50n,blockHash:hash})};
+ const options={rows:[row],cutoff:100,legacyClient,distributor,token,rebuild:()=>({root,budget:row.budget,allocations:[{address:wallet,amount:row.budget}]})};return{s,c,row,options};
+}
+async function scenario(fn){const f=fixture();try{await fn(f)}finally{f.s.close()}}
+test('funded 100 testnet PERL produces exactly 7 mainnet entitlement; repeat retains one snapshot',()=>scenario(async({s,c,options})=>{const a=await buildMigration(s,c,options);assert.equal(a.budget,String(7n*10n**18n));assert.equal(a.sourceChainId,46630);assert.equal((await buildMigration(s,c,options)).snapshotHash,a.snapshotHash);assert.equal(s.get('SELECT COUNT(*) n FROM compute_migration').n,1)}));
+test('cancelled allocations, future epochs and arbitrary balances create no entitlement',()=>scenario(async({s,c,row,options})=>{row.state='cancelled';await assert.rejects(buildMigration(s,c,options),{code:'no_eligibility'});row.state='active';row.epoch=101;await assert.rejects(buildMigration(s,c,options),{code:'no_eligibility'});assert.equal(s.get('SELECT COUNT(*) n FROM compute_migration').n,0)}));
+test('unfunded roots and unsuccessful funding receipts are rejected',()=>scenario(async({s,c,row,options})=>{row.funding_tx=null;await assert.rejects(buildMigration(s,c,options),{code:'legacy_funding'});row.funding_tx=hash;options.legacyClient.getTransactionReceipt=async()=>({status:'reverted',blockNumber:50n,blockHash:hash});await assert.rejects(buildMigration(s,c,options),{code:'legacy_finality'})}));
+test('pending finality and reorged funding receipts are rejected',()=>scenario(async({s,c,options})=>{options.legacyClient.getTransactionReceipt=async()=>({status:'success',blockNumber:101n,blockHash:hash});await assert.rejects(buildMigration(s,c,options),{code:'legacy_finality'});options.legacyClient.getTransactionReceipt=async()=>({status:'success',blockNumber:50n,blockHash:'0x'+'aa'.repeat(32)});await assert.rejects(buildMigration(s,c,options),{code:'legacy_finality'})}));
+test('wrong source chain, distributor and token are rejected',()=>scenario(async({s,c,row,options})=>{options.legacyClient.getChainId=async()=>4663;await assert.rejects(buildMigration(s,c,options),{code:'testnet_chain'});options.legacyClient.getChainId=async()=>46630;row.token=vault;await assert.rejects(buildMigration(s,c,options),{code:'eligibility'})}));
+test('duplicate epochs cannot count the same allocation twice',()=>scenario(async({s,c,row,options})=>{options.rows=[row,row];await assert.rejects(buildMigration(s,c,options),{code:'duplicate_epoch'});assert.equal(s.get('SELECT COUNT(*) n FROM compute_migration').n,0)}));
+test('migration reserve cannot exceed 70M and snapshot cannot change after pinning',()=>scenario(async({s,c,row,options})=>{await buildMigration(s,c,options);row.budget=String(200n*10n**18n);await assert.rejects(buildMigration(s,c,options),{code:'snapshot_locked'});row.budget=String(1000000001n*10n**18n);await assert.rejects(buildMigration(s,c,options),{code:'migration_cap'})}));
+test('cutoff is a closed epoch before mining start',()=>scenario(async({s,c,options})=>{options.cutoff=101;await assert.rejects(buildMigration(s,c,options),{code:'cutoff'})}));

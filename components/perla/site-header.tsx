@@ -7,6 +7,9 @@ import { normalizeProjectX } from '@/lib/perla/project-links';
 import './site-header.css';
 const github = 'https://github.com/perlacompute/perla-compute';
 const exploreLinks = [
+ /* PERLA_MAINNET_PUBLIC_NAV_V2 */
+ ['/platform/network?tab=mining', 'Mainnet mining', 'Workers, verified shares and earned PERL rewards'],
+ ['/platform/network?tab=convert', 'Testnet migration', 'Check your earned reward snapshot'],
  ['/platform/setup', 'Miner setup', 'Install and validate your worker'],
  ['/explorer', 'Proof Explorer', 'Inspect accepted contributions'],
  ['/rewards', 'Reward Center', 'Follow funded reward epochs'],

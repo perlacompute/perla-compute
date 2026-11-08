@@ -31,6 +31,7 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: node scripts/checks/vps-http.test.mjs
+      - run: node scripts/checks/mainnet/http.test.mjs
 
   rtx-software:
     name: RTX compilation and CPU protocol checks
@@ -61,4 +62,6 @@ jobs:
           git clone --filter=blob:none --no-checkout https://github.com/pearl-research-labs/pearl.git /tmp/perla-upstream
           git -C /tmp/perla-upstream checkout 82e6eee7076aafe10123e08db78f100d270c0582
           PERLA_NATIVE_PYTHON=/tmp/perla-native-env/bin/python PERLA_PEARL_SOURCE=/tmp/perla-upstream npm run check:mining
+      - name: Mainnet native domain and harder-target checks
+        run: PERLA_NATIVE_PYTHON=/tmp/perla-native-env/bin/python PERLA_PEARL_SOURCE=/tmp/perla-upstream npm run check:mainnet-native
       # A hosted CPU runner cannot perform a physical GPU self-test.
