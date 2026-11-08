@@ -113,12 +113,7 @@ export async function makePlan(
     "usdg_identity",
     "Canonical USDG must be deployed with 6 decimals on Robinhood Chain",
   );
-  const [supply, decimals, symbol, balance, nonce] = await Promise.all([
-    client.readContract({
-      address: token,
-      abi: tokenAbi,
-      functionName: "totalSupply",
-    }),
+  const [decimals, symbol, balance, nonce] = await Promise.all([
     client.readContract({
       address: token,
       abi: tokenAbi,
@@ -138,10 +133,10 @@ export async function makePlan(
     client.getTransactionCount({ address: owner, blockTag: "pending" }),
   ]);
   demand(
-    supply === 1000000000n * TOKEN_UNIT && decimals === 18 && symbol === "PERL",
+    decimals === 18 && symbol === "PERL",
     409,
     "token_metadata",
-    "Expected PERL with 18 decimals and a current total supply of 1B",
+    "Expected the configured PERL token with 18 decimals",
   );
   demand(
     balance >= INITIAL_FUNDING.total,

@@ -29,7 +29,7 @@ await build({
 const { makePlan, validatePlanActions, executePlan, sendJournaled, fundReserves, INITIAL_FUNDING } =
   await import("../../../.sites-runtime/mainnet/operator-test.mjs");
 const fixture =
-  'pragma solidity ^0.8.24; contract FixtureToken{string public constant symbol="PERL";uint8 public constant decimals=18;uint256 public constant totalSupply=1000000000 ether;mapping(address=>uint256)public balanceOf;mapping(address=>mapping(address=>uint256))public allowance;constructor(){balanceOf[msg.sender]=1000000 ether;}function grant(address to,uint256 n)external{balanceOf[to]+=n;}function approve(address to,uint256 n)external returns(bool){allowance[msg.sender][to]=n;return true;}function transferFrom(address from,address to,uint256 n)external returns(bool){require(balanceOf[from]>=n&&allowance[from][msg.sender]>=n);allowance[from][msg.sender]-=n;balanceOf[from]-=n;balanceOf[to]+=n;return true;}}';
+  'pragma solidity ^0.8.24; contract FixtureToken{string public constant symbol="PERL";uint8 public constant decimals=18;uint256 public totalSupply=1000000000 ether;mapping(address=>uint256)public balanceOf;mapping(address=>mapping(address=>uint256))public allowance;constructor(){balanceOf[msg.sender]=12439062 ether;}function burn(uint256 n)external{require(balanceOf[msg.sender]>=n);balanceOf[msg.sender]-=n;totalSupply-=n;}function grant(address to,uint256 n)external{balanceOf[to]+=n;}function approve(address to,uint256 n)external returns(bool){allowance[msg.sender][to]=n;return true;}function transferFrom(address from,address to,uint256 n)external returns(bool){require(balanceOf[from]>=n&&allowance[from][msg.sender]>=n);allowance[from][msg.sender]-=n;balanceOf[from]-=n;balanceOf[to]+=n;return true;}}';
 test("activation and signed transaction recovery on isolated chain 4663", async (t) => {
   const provider = ganache.provider({
       logging: { quiet: true },
@@ -71,7 +71,23 @@ test("activation and signed transaction recovery on isolated chain 4663", async 
         markupBps: 2000,
         features: {},
       };
+    await client.waitForTransactionReceipt({hash:await wallet.writeContract({address:c.token,abi:a.abi,functionName:"burn",args:[11439062n*10n**18n]})});
     const plan = await makePlan(c, account.address, {}, client);
+    await t.test("current supply of 988560938 PERL accepts a 1M initial funding plan",async()=>{
+      assert.equal(await client.readContract({address:c.token,abi:a.abi,functionName:"totalSupply"}),988560938n*10n**18n);
+      assert.equal(plan.initialFunding.total,(1000000n*10n**18n).toString());
+    });
+    await t.test("planning does not call totalSupply or gate the configured token on current supply",async()=>{
+      const noSupply={...client,readContract:args=>{if(args.functionName==="totalSupply")throw Error("totalSupply must not gate activation");return client.readContract(args)}};
+      const reviewed=await makePlan(c,account.address,{},noSupply);
+      assert.equal(reviewed.initialFunding.total,(1000000n*10n**18n).toString());
+    });
+    await t.test("incorrect ticker or decimals cannot create a plan",async()=>{
+      for(const [field,value] of [["decimals",6],["symbol","OTHER"]]){
+        const invalid={...client,readContract:args=>args.address.toLowerCase()===c.token.toLowerCase()&&args.functionName===field?Promise.resolve(value):client.readContract(args)};
+        await assert.rejects(makePlan(c,account.address,{},invalid),{code:"token_metadata"});
+      }
+    });
     await t.test(
       "plan predicts both vaults and bounds all five transactions",
       () => {

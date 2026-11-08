@@ -20,7 +20,7 @@ import {
   miningBudget,
 } from "../../../lib/compute/config.mjs";
 const fixture =
-  'pragma solidity ^0.8.24; contract FixtureToken{string public constant symbol="PERL";uint8 public constant decimals=18;uint256 public constant totalSupply=1000000000 ether;mapping(address=>uint256)public balanceOf;mapping(address=>mapping(address=>uint256))public allowance;constructor(){balanceOf[msg.sender]=totalSupply;}function approve(address to,uint256 n)external returns(bool){allowance[msg.sender][to]=n;return true;}function transfer(address to,uint256 n)external returns(bool){require(balanceOf[msg.sender]>=n);balanceOf[msg.sender]-=n;balanceOf[to]+=n;return true;}function transferFrom(address from,address to,uint256 n)external returns(bool){require(balanceOf[from]>=n&&allowance[from][msg.sender]>=n);allowance[from][msg.sender]-=n;balanceOf[from]-=n;balanceOf[to]+=n;return true;}}';
+  'pragma solidity ^0.8.24; contract FixtureToken{string public constant symbol="PERL";uint8 public constant decimals=18;uint256 public totalSupply=1000000000 ether;mapping(address=>uint256)public balanceOf;mapping(address=>mapping(address=>uint256))public allowance;constructor(){balanceOf[msg.sender]=totalSupply;}function burn(uint256 n)external{require(balanceOf[msg.sender]>=n);balanceOf[msg.sender]-=n;totalSupply-=n;}function approve(address to,uint256 n)external returns(bool){allowance[msg.sender][to]=n;return true;}function transfer(address to,uint256 n)external returns(bool){require(balanceOf[msg.sender]>=n);balanceOf[msg.sender]-=n;balanceOf[to]+=n;return true;}function transferFrom(address from,address to,uint256 n)external returns(bool){require(balanceOf[from]>=n&&allowance[from][msg.sender]>=n);allowance[from][msg.sender]-=n;balanceOf[from]-=n;balanceOf[to]+=n;return true;}}';
 test("reviewed mainnet contracts on isolated chain 4663", async (t) => {
   const provider = ganache.provider({
       logging: { quiet: true },
@@ -291,6 +291,23 @@ test("reviewed mainnet contracts on isolated chain 4663", async (t) => {
         assert.equal(d.balance, (200000000n * TOKEN_UNIT).toString());
       },
     );
+    await t.test("runtime remains healthy after burning 11439062 PERL outside the vault",async()=>{
+      assert.equal((await send(token,"FixtureToken","burn",[11439062n*TOKEN_UNIT])).status,"success");
+      assert.equal(await read(token,"FixtureToken","totalSupply"),988560938n*TOKEN_UNIT);
+      const d=await deploymentChecks(c,client);
+      assert.equal(d.balance,(200000000n*TOKEN_UNIT).toString());
+    });
+    await t.test("runtime health does not depend on a totalSupply call",async()=>{
+      const noSupply={...client,readContract:args=>{if(args.functionName==="totalSupply")throw Error("totalSupply must not gate health");return client.readContract(args)}};
+      const report=await deploymentChecks(c,noSupply);
+      assert.equal(report.balance,(200000000n*TOKEN_UNIT).toString());
+    });
+    await t.test("runtime rejects incorrect ticker or decimals",async()=>{
+      for(const [field,value] of [["decimals",6],["symbol","OTHER"]]){
+        const invalid={...client,readContract:args=>args.address.toLowerCase()===token.toLowerCase()&&args.functionName===field?Promise.resolve(value):client.readContract(args)};
+        await assert.rejects(deploymentChecks(c,invalid),{code:"token_metadata"});
+      }
+    });
     const m = manifest(reward, 0, first, [
       { address: alice, amount: (100n * TOKEN_UNIT).toString() },
       { address: bob, amount: (200n * TOKEN_UNIT).toString() },
